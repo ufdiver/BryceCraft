@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Voxel Quest: The Gated Vault</title>
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #87CEEB;
+            font-family: 'Courier New', monospace;
+            color: white;
+            user-select: none;
+        }
+
+        #hud {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.85);
+            padding: 15px;
+            border: 4px solid #555;
+            z-index: 10;
+            min-width: 220px;
+            box-shadow: 4px 4px 0 #000;
+        }
+
+        #map-container {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 100;
+        }
+
+        .btn {
+            padding: 12px 20px;
+            background: #4aa52e;
+            border: 3px solid #fff;
+            cursor: pointer;
+            font-weight: bold;
+            color: white;
+            box-shadow: 3px 3px 0px #000;
+        }
+
+        #map-overlay {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #111;
+            border: 6px solid #444;
+            padding: 20px;
+            display: none;
+            z-index: 200;
+            text-align: center;
+        }
+
+        #map-canvas {
+            background: #000;
+            border: 3px solid #fff;
+            image-rendering: pixelated;
+            margin-bottom: 15px;
+        }
+
+        #math-ui {
+            position: absolute;
+            top: 40%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #fff;
+            border: 8px solid #4aa52e;
+            padding: 30px;
+            color: #000;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            z-index: 150;
+            border-radius: 4px;
+            box-shadow: 10px 10px 0 rgba(0, 0, 0, 0.5);
+        }
+
+        #math-input {
+            font-size: 32px;
+            width: 140px;
+            text-align: center;
+            background: #eee;
+            border: 4px solid #4aa52e;
+            outline: none;
+            margin-top: 10px;
+        }
+
+        #msg {
+            position: absolute;
+            bottom: 120px;
+            width: 100%;
+            text-align: center;
+            font-size: 24px;
+            font-weight: bold;
+            text-shadow: 2px 2px #000;
+            pointer-events: none;
+            color: #ffff00;
+            z-index: 50;
+        }
+
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 14px;
+            height: 14px;
+            border: 2px solid white;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            border-radius: 50%;
+            opacity: 0.5;
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 3px;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div id="hud">
+        <div style="color: #00ffcc; font-weight: bold; margin-bottom:5px;">LEVEL <span id="lvl-val">1</span></div>
+        <div class="stat-row" style="color:#ffd700"><span>GOLD:</span> <span id="gold-val">0</span></div>
+        <div class="stat-row" style="color:#ff4444"><span>LIVES:</span> <span id="lives-val">3</span></div>
+        <div class="stat-row" style="color:#ffaa00"><span>BOMBS:</span> <span id="bomb-val">0</span></div>
+        <div style="font-size: 13px; margin-top:8px; border-top: 1px solid #444; padding-top:5px;">INV: <span
+                id="keys-val">Empty</span></div>
+    </div>
+
+    <div id="map-container">
+        <div class="btn" onclick="toggleMap()">MAZE MAP</div>
+    </div>
+    <div id="crosshair"></div>
+
+    <div id="map-overlay">
+        <h2 style="color:#fff; margin-top:0;">EXPLORED MAZE</h2>
+        <canvas id="map-canvas" width="300" height="300"></canvas>
+        <div><button class="btn" onclick="toggleMap()">RESUME</button></div>
+    </div>
+
+    <div id="math-ui">
+        <div id="math-problem" style="font-size:32px; font-weight:bold;"></div>
+        <input type="number" id="math-input" placeholder="?">
+    </div>
+
+    <div id="msg"></div>
+
+    <script type="importmap">
+        { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+
+        // --- CORE STATE ---
+        let gold = 0, lives = 3, bombs = 0, currentLevel = 1, inventory = [], isMathActive = false;
+        const GRID_SIZE = 17, CELL = 4, KEY_PRICE = 150, BOMB_PRICE = 75;
+        let mazeData = [], explored = [], discoveredItems = [], collidables = [], interactables = [], entities = [], fingers = [];
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x87CEEB);
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        const renderer = new THREE.WebGLRenderer({ antialias: false });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        scene.add(new THREE.AmbientLight(0xffffff, 0.9));
+        const sun = new THREE.DirectionalLight(0xffffff, 0.8);
+        sun.position.set(10, 20, 10);
+        scene.add(sun);
+
+        // --- THE HAND ---
+        const handGroup = new THREE.Group();
+        const skinMat = new THREE.MeshStandardMaterial({ color: 0xdbac82 });
+        const palm = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.2, 0.4), skinMat);
+        handGroup.add(palm);
+        for (let i = 0; i < 4; i++) {
+            const f = new THREE.Mesh(new THREE.BoxGeometry(0.08, 0.1, 0.3), skinMat);
+            f.position.set(-0.18 + (i * 0.12), 0.05, -0.3);
+            fingers.push(f); handGroup.add(f);
+        }
+        handGroup.position.set(0.6, -0.6, -1.2);
+        handGroup.visible = false;
+        camera.add(handGroup);
+        scene.add(camera);
+
+        // --- NPC BUILDERS ---
+        function createHumanNPC() {
+            const g = new THREE.Group();
+            const skin = new THREE.MeshStandardMaterial({ color: 0xdbac82 });
+            const head = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.6, 0.6), skin); head.position.y = 1.4;
+            const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.8, 0.3), new THREE.MeshStandardMaterial({ color: 0x00aaff })); body.position.y = 0.7;
+            g.add(head, body);
+            const shield = new THREE.Mesh(new THREE.BoxGeometry(2, 3, 2), new THREE.MeshBasicMaterial({ visible: false }));
+            shield.position.y = 1.5; g.add(shield);
+            return g;
+        }
+
+        function createFoxNPC() {
+            const g = new THREE.Group();
+            const orange = new THREE.MeshStandardMaterial({ color: 0xe67e22 });
+            const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.8), orange);
+            const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), orange); head.position.set(0, 0.4, 0.4);
+            g.add(body, head);
+            const shield = new THREE.Mesh(new THREE.BoxGeometry(2, 3, 2), new THREE.MeshBasicMaterial({ visible: false }));
+            shield.position.y = 1.5; g.add(shield);
+            return g;
+        }
+
+        // --- MAZE ENGINE ---
+        function generateMaze() {
+            let maze = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(1));
+            function carve(x, y) {
+                maze[y][x] = 0;
+                let dirs = [[0, -2], [0, 2], [-2, 0], [2, 0]].sort(() => Math.random() - 0.5);
+                for (let [dx, dy] of dirs) {
+                    let nx = x + dx, ny = y + dy;
+                    if (nx > 0 && nx < GRID_SIZE - 1 && ny > 0 && ny < GRID_SIZE - 1 && maze[ny][nx] === 1) {
+                        maze[y + dy / 2][x + dx / 2] = 0; carve(nx, ny);
+                    }
+                }
+            }
+            carve(1, 1); return maze;
+        }
+
+        function getAccessibleCells(startX, startY, blockX, blockY) {
+            let cells = [], queue = [{ x: startX, y: startY }], vis = new Set([`${startX},${startY}`]);
+            while (queue.length > 0) {
+                let curr = queue.shift(); cells.push(curr);
+                [[0, 1], [0, -1], [1, 0], [-1, 0]].forEach(([dx, dy]) => {
+                    let nx = curr.x + dx, ny = curr.y + dy;
+                    if (nx > 0 && nx < GRID_SIZE && ny > 0 && ny < GRID_SIZE && mazeData[ny][nx] === 0 && !vis.has(`${nx},${ny}`) && !(nx === blockX && ny === blockY)) {
+                        vis.add(`${nx},${ny}`); queue.push({ x: nx, y: ny });
+                    }
+                });
+            }
+            return cells;
+        }
+
+        function startLevel() {
+            // Clean up old scene
+            entities.forEach(e => scene.remove(e));
+            collidables.forEach(w => scene.remove(w));
+            interactables = []; entities = []; collidables = [];
+            inventory = []; discoveredItems = [];
+            explored = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(false));
+
+            mazeData = generateMaze();
+
+            // Critical Path Calculation
+            let q = [{ x: 1, y: 1, path: [] }], vis = new Set(["1,1"]), mainPath = [];
+            while (q.length > 0) {
+                let curr = q.shift();
+                if (curr.path.length > mainPath.length) mainPath = curr.path;
+                [[0, 1], [0, -1], [1, 0], [-1, 0]].forEach(([dx, dy]) => {
+                    let nx = curr.x + dx, ny = curr.y + dy;
+                    if (nx > 0 && nx < GRID_SIZE && ny > 0 && ny < GRID_SIZE && mazeData[ny][nx] === 0 && !vis.has(`${nx},${ny}`)) {
+                        vis.add(`${nx},${ny}`); q.push({ x: nx, y: ny, path: [...curr.path, { x: nx, y: ny }] });
+                    }
+                });
+            }
+
+            const rDoor = mainPath[Math.floor(mainPath.length * 0.35)];
+            const bDoor = mainPath[Math.floor(mainPath.length * 0.75)];
+            const trophy = mainPath[mainPath.length - 1];
+
+            // Build Zones
+            const zone1 = getAccessibleCells(1, 1, rDoor.x, rDoor.y);
+            const zone2 = getAccessibleCells(rDoor.x, rDoor.y, bDoor.x, bDoor.y);
+
+            // Spawns
+            spawnDoor(rDoor.x, rDoor.y, "Red Key", 0xff0000);
+            spawnDoor(bDoor.x, bDoor.y, "Blue Key", 0x0000ff);
+
+            const rk = zone1[Math.floor(Math.random() * zone1.length)];
+            spawnKeyShop(rk.x, rk.y, "Red Key", 0xff0000);
+            const bk = zone2[Math.floor(Math.random() * zone2.length)];
+            spawnKeyShop(bk.x, bk.y, "Blue Key", 0x0000ff);
+
+            // Bomb Shops
+            const bs1 = zone1[Math.floor(Math.random() * zone1.length)];
+            spawnBombShop(bs1.x, bs1.y);
+
+            // Visual World
+            const tex = new THREE.TextureLoader();
+            const wallMat = new THREE.MeshStandardMaterial({ map: tex.load('https://threejs.org/examples/textures/brick_diffuse.jpg') });
+            const floorMat = new THREE.MeshStandardMaterial({ map: tex.load('https://threejs.org/examples/textures/terrain/grasslight-big.jpg') });
+
+            for (let y = 0; y < GRID_SIZE; y++) {
+                for (let x = 0; x < GRID_SIZE; x++) {
+                    const f = new THREE.Mesh(new THREE.PlaneGeometry(CELL, CELL), floorMat);
+                    f.rotation.x = -Math.PI / 2; f.position.set(x * CELL, 0, y * CELL);
+                    scene.add(f); entities.push(f); // Floors are just entities (visual only)
+
+                    if (mazeData[y][x] === 1) {
+                        const w = new THREE.Mesh(new THREE.BoxGeometry(CELL, CELL, CELL), wallMat);
+                        w.position.set(x * CELL, CELL / 2, y * CELL);
+                        w.userData = { type: 'destructible' };
+                        scene.add(w); collidables.push(w);
+                    }
+                }
+            }
+
+            // NPCs
+            [...zone1, ...zone2].forEach(p => {
+                if (Math.random() < 0.12 && !(p.x == 1 && p.y == 1)) {
+                    const npc = Math.random() > 0.4 ? createHumanNPC() : createFoxNPC();
+                    npc.position.set(p.x * CELL, 0, p.y * CELL);
+                    npc.userData = { type: 'math' };
+                    scene.add(npc); interactables.push(npc); entities.push(npc);
+                }
+            });
+
+            const exit = new THREE.Mesh(new THREE.TorusKnotGeometry(0.4, 0.12), new THREE.MeshStandardMaterial({ color: 0xffd700 }));
+            exit.position.set(trophy.x * CELL, 1.5, trophy.y * CELL);
+            exit.userData = { type: 'exit', color: 0xffd700 };
+            scene.add(exit); interactables.push(exit); entities.push(exit);
+
+            camera.position.set(CELL, 2, CELL);
+            camera.rotation.set(0, 0, 0);
+            updateHUD();
+            showMsg("LEVEL " + currentLevel + ": FIND GOLD FOR RED KEY");
+        }
+
+        function spawnKeyShop(gx, gy, id, col) {
+            const group = new THREE.Group();
+            const mat = new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.4 });
+            const bit = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.7, 0.1), mat);
+            group.add(bit); group.position.set(gx * CELL, 1.5, gy * CELL);
+            group.userData = { type: 'shop', id, price: KEY_PRICE, color: col };
+            const shield = new THREE.Mesh(new THREE.BoxGeometry(2, 3, 2), new THREE.MeshBasicMaterial({ visible: false }));
+            group.add(shield); scene.add(group); interactables.push(group); entities.push(group);
+        }
+
+        function spawnBombShop(gx, gy) {
+            const group = new THREE.Group();
+            const bomb = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.6, 0.6), new THREE.MeshStandardMaterial({ color: 0x333333 }));
+            group.add(bomb); group.position.set(gx * CELL, 1, gy * CELL);
+            group.userData = { type: 'shop', id: 'Bomb', price: BOMB_PRICE, color: 0x333333 };
+            const shield = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), new THREE.MeshBasicMaterial({ visible: false }));
+            group.add(shield); scene.add(group); interactables.push(group); entities.push(group);
+        }
+
+        function spawnDoor(gx, gy, id, col) {
+            const isH = mazeData[gy][gx - 1] === 1 || mazeData[gy][gx + 1] === 1;
+            const d = new THREE.Mesh(new THREE.BoxGeometry(CELL * 1.15, CELL, 0.5), new THREE.MeshStandardMaterial({ color: col, transparent: true, opacity: 0.6 }));
+            d.position.set(gx * CELL, CELL / 2, gy * CELL);
+            if (!isH) d.rotation.y = Math.PI / 2;
+            d.userData = { type: 'door', id, color: col };
+            scene.add(d); interactables.push(d); collidables.push(d);
+        }
+
+        // --- INTERACTION ---
+        const keysDown = {};
+        window.addEventListener('keydown', e => {
+            if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space", "KeyB"].includes(e.code)) e.preventDefault();
+            keysDown[e.code] = true;
+            if (e.code === 'Space' && !isMathActive) handleGrab();
+            if (e.code === 'KeyB' && !isMathActive) handleBomb();
+        });
+        window.addEventListener('keyup', e => keysDown[e.code] = false);
+
+        function handleGrab() {
+            handGroup.visible = true; handGroup.position.z = -1.8;
+            fingers.forEach(f => f.rotation.x = -Math.PI / 3);
+            const ray = new THREE.Raycaster();
+            ray.setFromCamera(new THREE.Vector2(0, 0), camera);
+            const hits = ray.intersectObjects(interactables, true);
+            if (hits.length > 0 && hits[0].distance < 7) {
+                let obj = hits[0].object;
+                while (obj.parent && !obj.userData.type) obj = obj.parent;
+                if (obj.userData.type) processLogic(obj);
+            }
+            setTimeout(() => { handGroup.visible = false; handGroup.position.z = -1.2; fingers.forEach(f => f.rotation.x = 0); }, 300);
+        }
+
+        function handleBomb() {
+            if (bombs <= 0) { showMsg("OUT OF BOMBS!"); return; }
+            const ray = new THREE.Raycaster();
+            ray.setFromCamera(new THREE.Vector2(0, 0), camera);
+            const hits = ray.intersectObjects(collidables);
+            if (hits.length > 0 && hits[0].distance < 6) {
+                const wall = hits[0].object;
+                if (wall.userData.type === 'destructible') {
+                    bombs--; updateHUD();
+                    const b = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), new THREE.MeshBasicMaterial({ color: 0xff0000 }));
+                    b.position.copy(hits[0].point); scene.add(b);
+                    setTimeout(() => {
+                        scene.remove(b); scene.remove(wall);
+                        collidables = collidables.filter(w => w !== wall);
+                        showMsg("BOOM!");
+                    }, 1500);
+                }
+            }
+        }
+
+        function processLogic(obj) {
+            const d = obj.userData;
+            if (d.type === 'exit') {
+                currentLevel++; lives++; showMsg("SUCCESS! LEVEL " + currentLevel);
+                setTimeout(startLevel, 1500);
+            } else if (d.type === 'math') {
+                isMathActive = true;
+                const a = Math.floor(Math.random() * 9) + 2, b = Math.floor(Math.random() * 9) + 2, ans = a * b;
+                document.getElementById('math-problem').innerText = `${a} x ${b} = ?`;
+                document.getElementById('math-ui').style.display = 'flex';
+                const input = document.getElementById('math-input');
+                input.value = ''; input.focus();
+                const check = (e) => {
+                    if (e.key === 'Enter') {
+                        if (parseInt(input.value) === ans) {
+                            gold += 45; showMsg("CORRECT! +45 GOLD");
+                            scene.remove(obj); interactables = interactables.filter(i => i !== obj);
+                        } else { lives--; showMsg("WRONG! -1 LIFE"); if (lives <= 0) location.reload(); }
+                        isMathActive = false; document.getElementById('math-ui').style.display = 'none';
+                        updateHUD(); window.removeEventListener('keydown', check);
+                    }
+                };
+                window.addEventListener('keydown', check);
+            } else if (d.type === 'shop') {
+                if (gold >= d.price) {
+                    gold -= d.price;
+                    if (d.id === 'Bomb') bombs++; else inventory.push(d.id);
+                    if (d.id !== 'Bomb') { scene.remove(obj); interactables = interactables.filter(i => i !== obj); }
+                    showMsg("PURCHASED " + d.id); updateHUD();
+                } else showMsg("NEED " + (d.price - gold) + " MORE GOLD!");
+            } else if (d.type === 'door') {
+                if (inventory.includes(d.id)) {
+                    scene.remove(obj); collidables = collidables.filter(w => w !== obj);
+                    showMsg("UNLOCKED!");
+                } else showMsg("NEED THE " + d.id);
+            }
+        }
+
+        // --- MAP & LOOP ---
+        window.toggleMap = () => {
+            const m = document.getElementById('map-overlay');
+            m.style.display = (m.style.display === 'block') ? 'none' : 'block';
+            if (m.style.display === 'block') drawMap();
+        };
+
+        function drawMap() {
+            const canvas = document.getElementById('map-canvas');
+            const ctx = canvas.getContext('2d');
+            const s = canvas.width / GRID_SIZE;
+            ctx.fillStyle = "#000"; ctx.fillRect(0, 0, 300, 300);
+            for (let y = 0; y < GRID_SIZE; y++) {
+                for (let x = 0; x < GRID_SIZE; x++) {
+                    if (explored[y][x]) {
+                        const isWall = collidables.some(w => Math.round(w.position.x / CELL) === x && Math.round(w.position.z / CELL) === y);
+                        ctx.fillStyle = isWall ? "#444" : "#fff";
+                        ctx.fillRect(x * s, y * s, s, s);
+                    }
+                }
+            }
+            const px = (camera.position.x / CELL) * s, py = (camera.position.z / CELL) * s, ang = camera.rotation.y;
+            ctx.save(); ctx.translate(px, py); ctx.rotate(ang); ctx.fillStyle = "red";
+            ctx.beginPath(); ctx.moveTo(0, -s); ctx.lineTo(-s / 1.5, s / 1.5); ctx.lineTo(s / 1.5, s / 1.5); ctx.fill(); ctx.restore();
+        }
+
+        function updateHUD() {
+            document.getElementById('gold-val').innerText = gold;
+            document.getElementById('lives-val').innerText = lives;
+            document.getElementById('bomb-val').innerText = bombs;
+            document.getElementById('lvl-val').innerText = currentLevel;
+            document.getElementById('keys-val').innerText = inventory.length ? inventory.join(", ") : "None";
+        }
+
+        function showMsg(t) {
+            const m = document.getElementById('msg'); m.innerText = t;
+            setTimeout(() => { if (m.innerText === t) m.innerText = ""; }, 2500);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            if (!isMathActive) {
+                const old = camera.position.clone();
+                if (keysDown['ArrowUp'] || keysDown['KeyW']) camera.translateZ(-0.13);
+                if (keysDown['ArrowDown'] || keysDown['KeyS']) camera.translateZ(0.13);
+                if (keysDown['ArrowLeft'] || keysDown['KeyA']) camera.rotation.y += 0.045;
+                if (keysDown['ArrowRight'] || keysDown['KeyD']) camera.rotation.y -= 0.045;
+
+                const pB = new THREE.Box3().setFromCenterAndSize(camera.position, new THREE.Vector3(1.2, 1, 1.2));
+                for (let w of collidables) {
+                    if (pB.intersectsBox(new THREE.Box3().setFromObject(w))) { camera.position.copy(old); break; }
+                }
+
+                const gx = Math.round(camera.position.x / CELL), gy = Math.round(camera.position.z / CELL);
+                if (gx >= 0 && gx < GRID_SIZE && gy >= 0 && gy < GRID_SIZE) {
+                    explored[gy][gx] = true;
+                }
+            }
+            entities.forEach(i => { if (i.userData.type === 'exit') i.rotation.y += 0.05; });
+            renderer.render(scene, camera);
+        }
+
+        startLevel();
+        animate();
+    </script>
+</body>
+
+</html>
