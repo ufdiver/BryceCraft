@@ -161,9 +161,30 @@
         import * as THREE from 'three';
 
         // --- CORE STATE ---
-        let gold = 0, lives = 3, bombs = 0, currentLevel = 1, inventory = [], isMathActive = false;
+        let gold = 0, lives = 3, bombs = 0, currentLevel = 1, inventory = [], isMathActive = false, lastHit = 0;
         const GRID_SIZE = 17, CELL = 4, KEY_PRICE = 150, BOMB_PRICE = 75;
-        let mazeData = [], explored = [], discoveredItems = [], collidables = [], interactables = [], entities = [], fingers = [];
+        let mazeData = [], explored = [], discoveredItems = [], collidables = [], interactables = [], entities = [], fingers = [], enemies = [];
+
+        // --- AUDIO ENGINE ---
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function playTone(freq, type, dur, vol = 0.1) {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.type = type; osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            gain.gain.setValueAtTime(vol, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.start(); osc.stop(audioCtx.currentTime + dur);
+        }
+        const sfx = {
+            hurt: () => { playTone(150, 'sawtooth', 0.4, 0.2); playTone(100, 'sine', 0.4, 0.2); },
+            buy: () => { playTone(600, 'sine', 0.1); setTimeout(() => playTone(900, 'sine', 0.2), 100); },
+            win: () => { playTone(800, 'sine', 0.1); setTimeout(() => playTone(1200, 'sine', 0.3), 100); },
+            fail: () => { playTone(200, 'square', 0.3, 0.15); },
+            levelUp: () => { 
+                [440, 554, 659, 880].forEach((f, i) => setTimeout(() => playTone(f, 'sine', 0.2), i * 150));
+            }
+        };
 
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x87CEEB);
@@ -192,7 +213,7 @@
         camera.add(handGroup);
         scene.add(camera);
 
-        // --- NPC BUILDERS ---
+        // --- NPC & ENEMY BUILDERS ---
         function createHumanNPC() {
             const g = new THREE.Group();
             const skin = new THREE.MeshStandardMaterial({ color: 0xdbac82 });
@@ -212,6 +233,30 @@
             g.add(body, head);
             const shield = new THREE.Mesh(new THREE.BoxGeometry(2, 3, 2), new THREE.MeshBasicMaterial({ visible: false }));
             shield.position.y = 1.5; g.add(shield);
+            return g;
+        }
+
+        function createSlimeEnemy() {
+            const g = new THREE.Group();
+            const slimeMat = new THREE.MeshStandardMaterial({ color: 0x00ff00, transparent: true, opacity: 0.8 });
+            const body = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8), slimeMat);
+            body.position.y = 0.5;
+            body.userData = { type: 'enemy' };
+            g.add(body);
+            return g;
+        }
+
+        function createGhostEnemy() {
+            const g = new THREE.Group();
+            const ghostMat = new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.6 });
+            const body = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 0.8, 8), ghostMat);
+            const head = new THREE.Mesh(new THREE.SphereGeometry(0.4, 8, 8), ghostMat);
+            head.position.y = 0.4; body.position.y = 0;
+            const bodyGroup = new THREE.Group();
+            bodyGroup.add(body, head);
+            bodyGroup.userData = { type: 'enemy' };
+            g.add(bodyGroup);
+            g.position.y = 1.6;
             return g;
         }
 
@@ -249,7 +294,8 @@
             // Clean up old scene
             entities.forEach(e => scene.remove(e));
             collidables.forEach(w => scene.remove(w));
-            interactables = []; entities = []; collidables = [];
+            enemies.forEach(e => scene.remove(e));
+            interactables = []; entities = []; collidables = []; enemies = [];
             inventory = []; discoveredItems = [];
             explored = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(false));
 
@@ -275,23 +321,30 @@
             // Build Zones
             const zone1 = getAccessibleCells(1, 1, rDoor.x, rDoor.y);
             const zone2 = getAccessibleCells(rDoor.x, rDoor.y, bDoor.x, bDoor.y);
+            console.log("Zone1 cells:", zone1.length, "Zone2 cells:", zone2.length);
 
             // Spawns
             spawnDoor(rDoor.x, rDoor.y, "Red Key", 0xff0000);
             spawnDoor(bDoor.x, bDoor.y, "Blue Key", 0x0000ff);
 
-            const rk = zone1[Math.floor(Math.random() * zone1.length)];
-            spawnKeyShop(rk.x, rk.y, "Red Key", 0xff0000);
-            const bk = zone2[Math.floor(Math.random() * zone2.length)];
-            spawnKeyShop(bk.x, bk.y, "Blue Key", 0x0000ff);
-
-            // Bomb Shops
-            const bs1 = zone1[Math.floor(Math.random() * zone1.length)];
-            spawnBombShop(bs1.x, bs1.y);
+            if (zone1.length > 0) {
+                const rk = zone1[Math.floor(Math.random() * zone1.length)];
+                spawnKeyShop(rk.x, rk.y, "Red Key", 0xff0000);
+                const bs1 = zone1[Math.floor(Math.random() * zone1.length)];
+                spawnBombShop(bs1.x, bs1.y);
+            }
+            if (zone2.length > 0) {
+                const bk = zone2[Math.floor(Math.random() * zone2.length)];
+                spawnKeyShop(bk.x, bk.y, "Blue Key", 0x0000ff);
+            }
 
             // Visual World
             const tex = new THREE.TextureLoader();
-            const wallMat = new THREE.MeshStandardMaterial({ map: tex.load('https://threejs.org/examples/textures/brick_diffuse.jpg') });
+            const wallHue = (currentLevel * 60) % 360;
+            const wallMat = new THREE.MeshStandardMaterial({ 
+                color: new THREE.Color(`hsl(${wallHue}, 40%, 40%)`),
+                map: tex.load('https://threejs.org/examples/textures/brick_diffuse.jpg') 
+            });
             const floorMat = new THREE.MeshStandardMaterial({ map: tex.load('https://threejs.org/examples/textures/terrain/grasslight-big.jpg') });
 
             for (let y = 0; y < GRID_SIZE; y++) {
@@ -310,8 +363,10 @@
             }
 
             // NPCs
-            [...zone1, ...zone2].forEach(p => {
-                if (Math.random() < 0.12 && !(p.x == 1 && p.y == 1)) {
+            const allWalkable = [...zone1, ...zone2, ...mainPath];
+            allWalkable.forEach(p => {
+                const distToSpawn = Math.abs(p.x - 1) + Math.abs(p.y - 1);
+                if (Math.random() < 0.12 && distToSpawn > 2) {
                     const npc = Math.random() > 0.4 ? createHumanNPC() : createFoxNPC();
                     npc.position.set(p.x * CELL, 0, p.y * CELL);
                     npc.userData = { type: 'math' };
@@ -319,9 +374,33 @@
                 }
             });
 
+            // Enemies (Scaled by level)
+            const baseCount1 = currentLevel === 1 ? 1 : (currentLevel === 2 ? 2 : 4);
+            const baseCount2 = currentLevel === 1 ? 2 : (currentLevel === 2 ? 4 : 6);
+            
+            const targetZones = [
+                { zone: zone1.length > 0 ? zone1 : mainPath, count: baseCount1 },
+                { zone: zone2.length > 0 ? zone2 : mainPath, count: baseCount2 }
+            ];
+
+            targetZones.forEach(({ zone, count }) => {
+                if (zone.length === 0) return;
+                for (let i = 0; i < count; i++) {
+                    const p = zone[Math.floor(Math.random() * zone.length)];
+                    const enemy = Math.random() > 0.5 ? createSlimeEnemy() : createGhostEnemy();
+                    enemy.position.set(p.x * CELL, 0, p.y * CELL);
+                    enemy.userData = { type: 'enemy', dir: new THREE.Vector3(1, 0, 0), speed: 0.04 + Math.random() * 0.04 };
+                    scene.add(enemy);
+                    enemies.push(enemy);
+                }
+            });
+            console.log("Level", currentLevel, "Enemies spawned:", enemies.length);
+
             const exit = new THREE.Mesh(new THREE.TorusKnotGeometry(0.4, 0.12), new THREE.MeshStandardMaterial({ color: 0xffd700 }));
             exit.position.set(trophy.x * CELL, 1.5, trophy.y * CELL);
             exit.userData = { type: 'exit', color: 0xffd700 };
+            const exitShield = new THREE.Mesh(new THREE.BoxGeometry(3, 4, 3), new THREE.MeshBasicMaterial({ visible: false }));
+            exit.add(exitShield);
             scene.add(exit); interactables.push(exit); entities.push(exit);
 
             camera.position.set(CELL, 2, CELL);
@@ -336,7 +415,7 @@
             const bit = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.7, 0.1), mat);
             group.add(bit); group.position.set(gx * CELL, 1.5, gy * CELL);
             group.userData = { type: 'shop', id, price: KEY_PRICE, color: col };
-            const shield = new THREE.Mesh(new THREE.BoxGeometry(2, 3, 2), new THREE.MeshBasicMaterial({ visible: false }));
+            const shield = new THREE.Mesh(new THREE.BoxGeometry(3, 4, 3), new THREE.MeshBasicMaterial({ visible: false }));
             group.add(shield); scene.add(group); interactables.push(group); entities.push(group);
         }
 
@@ -345,7 +424,7 @@
             const bomb = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.6, 0.6), new THREE.MeshStandardMaterial({ color: 0x333333 }));
             group.add(bomb); group.position.set(gx * CELL, 1, gy * CELL);
             group.userData = { type: 'shop', id: 'Bomb', price: BOMB_PRICE, color: 0x333333 };
-            const shield = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 2), new THREE.MeshBasicMaterial({ visible: false }));
+            const shield = new THREE.Mesh(new THREE.BoxGeometry(3, 4, 3), new THREE.MeshBasicMaterial({ visible: false }));
             group.add(shield); scene.add(group); interactables.push(group); entities.push(group);
         }
 
@@ -374,7 +453,7 @@
             const ray = new THREE.Raycaster();
             ray.setFromCamera(new THREE.Vector2(0, 0), camera);
             const hits = ray.intersectObjects(interactables, true);
-            if (hits.length > 0 && hits[0].distance < 7) {
+            if (hits.length > 0 && hits[0].distance < 8.5) {
                 let obj = hits[0].object;
                 while (obj.parent && !obj.userData.type) obj = obj.parent;
                 if (obj.userData.type) processLogic(obj);
@@ -405,6 +484,7 @@
         function processLogic(obj) {
             const d = obj.userData;
             if (d.type === 'exit') {
+                sfx.levelUp();
                 currentLevel++; lives++; showMsg("SUCCESS! LEVEL " + currentLevel);
                 setTimeout(startLevel, 1500);
             } else if (d.type === 'math') {
@@ -417,9 +497,9 @@
                 const check = (e) => {
                     if (e.key === 'Enter') {
                         if (parseInt(input.value) === ans) {
-                            gold += 45; showMsg("CORRECT! +45 GOLD");
+                            gold += 45; showMsg("CORRECT! +45 GOLD"); sfx.win();
                             scene.remove(obj); interactables = interactables.filter(i => i !== obj);
-                        } else { lives--; showMsg("WRONG! -1 LIFE"); if (lives <= 0) location.reload(); }
+                        } else { lives--; showMsg("WRONG! -1 LIFE"); sfx.fail(); if (lives <= 0) location.reload(); }
                         isMathActive = false; document.getElementById('math-ui').style.display = 'none';
                         updateHUD(); window.removeEventListener('keydown', check);
                     }
@@ -427,7 +507,7 @@
                 window.addEventListener('keydown', check);
             } else if (d.type === 'shop') {
                 if (gold >= d.price) {
-                    gold -= d.price;
+                    gold -= d.price; sfx.buy();
                     if (d.id === 'Bomb') bombs++; else inventory.push(d.id);
                     if (d.id !== 'Bomb') { scene.remove(obj); interactables = interactables.filter(i => i !== obj); }
                     showMsg("PURCHASED " + d.id); updateHUD();
@@ -488,10 +568,40 @@
                 if (keysDown['ArrowLeft'] || keysDown['KeyA']) camera.rotation.y += 0.045;
                 if (keysDown['ArrowRight'] || keysDown['KeyD']) camera.rotation.y -= 0.045;
 
-                const pB = new THREE.Box3().setFromCenterAndSize(camera.position, new THREE.Vector3(1.2, 1, 1.2));
+                const playerBB = new THREE.Box3().setFromCenterAndSize(camera.position, new THREE.Vector3(1.2, 1, 1.2));
                 for (let w of collidables) {
-                    if (pB.intersectsBox(new THREE.Box3().setFromObject(w))) { camera.position.copy(old); break; }
+                    if (playerBB.intersectsBox(new THREE.Box3().setFromObject(w))) { camera.position.copy(old); break; }
                 }
+
+                enemies.forEach(en => {
+                    const d = en.userData;
+                    en.position.add(d.dir.clone().multiplyScalar(d.speed));
+                    const enBB = new THREE.Box3().setFromCenterAndSize(en.position, new THREE.Vector3(1, 1, 1));
+                    let hit = false;
+                    for (let w of collidables) {
+                        if (enBB.intersectsBox(new THREE.Box3().setFromObject(w))) { hit = true; break; }
+                    }
+                    if (hit) {
+                        en.position.sub(d.dir.clone().multiplyScalar(d.speed));
+                        const dirs = [new THREE.Vector3(1, 0, 0), new THREE.Vector3(-1, 0, 0), new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, -1)];
+                        d.dir = dirs[Math.floor(Math.random() * dirs.length)];
+                    }
+                    
+                    // --- PLAYER COLLISION CHECK ---
+                    // Calculate distance on the XZ plane (ignore Y/height)
+                    const pPos = new THREE.Vector2(camera.position.x, camera.position.z);
+                    const ePos = new THREE.Vector2(en.position.x, en.position.z);
+                    const distXZ = pPos.distanceTo(ePos);
+                    
+                    if (Date.now() - lastHit > 1000 && (distXZ < 1.8 || playerBB.intersectsBox(enBB))) {
+                        console.log("COLLIDED! Distance:", distXZ.toFixed(2));
+                        lastHit = Date.now(); sfx.hurt();
+                        lives--; updateHUD(); showMsg("TOUCHED ENEMY! -1 LIFE");
+                        camera.position.set(CELL, 2, CELL);
+                        camera.rotation.set(0, 0, 0); // Reset view
+                        if (lives <= 0) location.reload();
+                    }
+                });
 
                 const gx = Math.round(camera.position.x / CELL), gy = Math.round(camera.position.z / CELL);
                 if (gx >= 0 && gx < GRID_SIZE && gy >= 0 && gy < GRID_SIZE) {
