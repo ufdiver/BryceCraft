@@ -139,10 +139,89 @@
             transform: scale(0.5);
             transition: all 2.5s ease;
         }
+
+        /* BRYCECRAFT LANDING PAGE */
+        #landing-page {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: linear-gradient(rgba(0,0,0,0.5), rgba(0,0,0,0.5)), url('https://www.transparenttextures.com/patterns/p6.png'), #4a7d3c;
+            background-size: 100px;
+            display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+            z-index: 2000;
+            text-align: center;
+        }
+
+        #title-container {
+            position: relative;
+            margin-bottom: 50px;
+        }
+
+        #main-title {
+            font-size: 110px;
+            color: #fff;
+            text-shadow: 8px 8px 0 #3b3b3b;
+            font-family: 'Courier New', monospace;
+            letter-spacing: -5px;
+            font-weight: 900;
+            margin: 0;
+        }
+
+        #splash {
+            position: absolute;
+            right: -60px; bottom: -10px;
+            font-size: 24px;
+            color: #ffff00;
+            text-shadow: 2px 2px #000;
+            transform: rotate(-20deg);
+            animation: splashPulse 0.5s infinite alternate;
+            font-weight: bold;
+        }
+
+        @keyframes splashPulse {
+            from { transform: rotate(-20deg) scale(1); }
+            to { transform: rotate(-20deg) scale(1.1); }
+        }
+
+        .mc-btn {
+            width: 400px;
+            padding: 15px;
+            background: #666;
+            border: 4px solid #000;
+            border-top-color: #aaa;
+            border-left-color: #aaa;
+            color: #e0e0e0;
+            font-size: 24px;
+            cursor: pointer;
+            text-shadow: 2px 2px #000;
+            margin-bottom: 10px;
+            transition: all 0.1s;
+        }
+
+        .mc-btn:hover {
+            background: #7a7a7a;
+            color: #ffffdd;
+            border: 4px solid #fff;
+        }
+
+        .mc-btn:active {
+            padding-top: 17px;
+            padding-bottom: 13px;
+        }
     </style>
 </head>
 
 <body>
+
+    <div id="landing-page">
+        <div id="title-container">
+            <h1 id="main-title">BRYCECRAFT</h1>
+            <div id="splash">3D MATH QUEST!</div>
+        </div>
+        <button class="mc-btn" onclick="startGame()">START GAME</button>
+        <button class="mc-btn" onclick="alert('Controls: WASD to Move, Space to Grab, B for Bomb!')">HOW TO PLAY</button>
+        <p style="margin-top:20px; color:#aaa; font-style:italic">v1.2 - Voxel Engine Alpha</p>
+    </div>
 
     <div id="hud">
         <div style="color: #00ffcc; font-weight: bold; margin-bottom:5px;">LEVEL <span id="lvl-val">1</span></div>
@@ -184,6 +263,7 @@
         // --- CORE STATE ---
         let gold = 0, lives = 3, bombs = 1, currentLevel = 1, inventory = [], isMathActive = false, lastHit = 0, isDead = false, startRotation = 0, boatMesh = null, boatAngle = 0;
         let boatState = 'patrol', ferrymanAngle = 0, boatRadius = 0, isPlayerOnBoat = false, atShore = null, lastDisembark = 0; 
+        let isGameStarted = false;
         const GRID_SIZE = 17, CELL = 4, KEY_PRICE = 150, BOMB_PRICE = 75;
         let mazeData = [], explored = [], discoveredItems = [], collidables = [], interactables = [], entities = [], fingers = [], enemies = [], waterBounds = null;
 
@@ -794,8 +874,8 @@
                                 scene.remove(obj); interactables = interactables.filter(i => i !== obj);
                             }
                         } else { 
-                            showMsg("WRONG! -1 LIFE"); sfx.fail(); 
-                            handleDeath();
+                            sfx.fail(); 
+                            handleDeath("WRONG! -1 LIFE");
                         }
                         isMathActive = false; document.getElementById('math-ui').style.display = 'none';
                         updateHUD(); window.removeEventListener('keydown', check);
@@ -824,6 +904,20 @@
             if (m.style.display === 'block') drawMap();
         };
 
+        window.startGame = () => {
+            console.log("Game Starting...");
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            document.getElementById('landing-page').style.display = 'none';
+            if (!isGameStarted) {
+                isGameStarted = true;
+                startLevel();
+                animate();
+            } else {
+                gold = 0; lives = 3; bombs = 1; currentLevel = 1; inventory = [];
+                updateHUD(); startLevel();
+            }
+        };
+
         function handleDeath(msg = "TOUCHED ENEMY! -1 LIFE") {
             if (isDead) return;
             isDead = true; isPlayerOnBoat = false; 
@@ -839,7 +933,10 @@
 
             setTimeout(() => {
                 if (lives <= 0) {
-                    location.reload();
+                    document.getElementById('landing-page').style.display = 'flex';
+                    overlay.style.opacity = 0;
+                    txt.style.transform = 'scale(0.5)';
+                    isDead = false;
                 } else {
                     camera.position.set(CELL, 2, CELL);
                     camera.rotation.set(0, startRotation + Math.PI, 0); 
@@ -848,7 +945,7 @@
                     overlay.style.background = 'rgba(180, 0, 0, 0)';
                     txt.style.transform = 'scale(0.5)';
                 }
-            }, 3000);
+            }, 2500);
         }
 
         function drawMap() {
@@ -1009,9 +1106,6 @@
             entities.forEach(i => { if (i.userData.type === 'exit') i.rotation.y += 0.05; });
             renderer.render(scene, camera);
         }
-
-        startLevel();
-        animate();
     </script>
 </body>
 
