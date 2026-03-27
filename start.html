@@ -183,6 +183,7 @@
 
         // --- CORE STATE ---
         let gold = 0, lives = 3, bombs = 1, currentLevel = 1, inventory = [], isMathActive = false, lastHit = 0, isDead = false, startRotation = 0, boatMesh = null, boatAngle = 0;
+        let boatState = 'patrol', ferrymanAngle = 0, boatRadius = 0, isPlayerOnBoat = false, atShore = null, lastDisembark = 0; 
         const GRID_SIZE = 17, CELL = 4, KEY_PRICE = 150, BOMB_PRICE = 75;
         let mazeData = [], explored = [], discoveredItems = [], collidables = [], interactables = [], entities = [], fingers = [], enemies = [], waterBounds = null;
 
@@ -237,12 +238,58 @@
         // --- NPC & ENEMY BUILDERS ---
         function createHumanNPC(difficulty = 1) {
             const colors = [0x44ff44, 0xffff44, 0xff4444]; // Green, Yellow, Red
+            const diffColor = colors[difficulty-1];
+            const g = new THREE.Group();
+            
+            const skin = new THREE.MeshStandardMaterial({ color: 0xdbac82 });
+            const shirtMat = new THREE.MeshStandardMaterial({ color: diffColor });
+            const pantMat = new THREE.MeshStandardMaterial({ color: 0x303f9f }); // Classic blue pants
+            
+            // Head
+            const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), skin);
+            head.position.y = 1.65;
+            
+            // Body/Torso
+            const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.7, 0.3), shirtMat);
+            body.position.y = 1.05;
+            
+            // Arms
+            const lArm = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.7, 0.2), skin);
+            lArm.position.set(-0.4, 1.05, 0);
+            const rArm = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.7, 0.2), skin);
+            rArm.position.set(0.4, 1.05, 0);
+            
+            // Legs
+            const lLeg = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.7, 0.25), pantMat);
+            lLeg.position.set(-0.15, 0.35, 0);
+            const rLeg = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.7, 0.25), pantMat);
+            rLeg.position.set(0.15, 0.35, 0);
+            
+            g.add(head, body, lArm, rArm, lLeg, rLeg);
+            // DEBUG SHIELD (Normally hidden)
+            const shield = new THREE.Mesh(new THREE.BoxGeometry(1.2, 3, 1.2), new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true, transparent: true, opacity: 0.2 }));
+            shield.position.y = 1.5; g.add(shield);
+            return g;
+        }
+
+        function createFerryman() {
+            const colors = [0x795548]; // Brown/Ferryman theme
+            const diffColor = colors[0];
             const g = new THREE.Group();
             const skin = new THREE.MeshStandardMaterial({ color: 0xdbac82 });
-            const head = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.6, 0.6), skin); head.position.y = 1.4;
-            const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.8, 0.3), new THREE.MeshStandardMaterial({ color: colors[difficulty-1] })); body.position.y = 0.7;
-            g.add(head, body);
-            // DEBUG SHIELD (Normally hidden)
+            const shirtMat = new THREE.MeshStandardMaterial({ color: diffColor });
+            const pantMat = new THREE.MeshStandardMaterial({ color: 0x212121 });
+            const hatMat = new THREE.MeshStandardMaterial({ color: 0x3e2723 });
+
+            const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), skin); head.position.y = 1.65;
+            const hat = new THREE.Mesh(new THREE.BoxGeometry(0.65, 0.1, 0.65), hatMat); hat.position.y = 1.95;
+            const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.7, 0.3), shirtMat); body.position.y = 1.05;
+            const lArm = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.7, 0.2), skin); lArm.position.set(-0.4, 1.05, 0);
+            const rArm = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.7, 0.2), skin); rArm.position.set(0.4, 1.05, 0);
+            const lLeg = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.7, 0.25), pantMat); lLeg.position.set(-0.15, 0.35, 0);
+            const rLeg = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.7, 0.25), pantMat); rLeg.position.set(0.15, 0.35, 0);
+            
+            g.add(head, hat, body, lArm, rArm, lLeg, rLeg);
             const shield = new THREE.Mesh(new THREE.BoxGeometry(1.2, 3, 1.2), new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true, transparent: true, opacity: 0.2 }));
             shield.position.y = 1.5; g.add(shield);
             return g;
@@ -252,9 +299,34 @@
             const colors = [0x44ff44, 0xffff44, 0xff4444];
             const g = new THREE.Group();
             const mat = new THREE.MeshStandardMaterial({ color: colors[difficulty-1] });
-            const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.8), mat);
-            const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), mat); head.position.set(0, 0.4, 0.4);
-            g.add(body, head);
+            const darkMat = new THREE.MeshStandardMaterial({ color: 0x3e2723 }); // Nose/Eyes/Tail tip
+            
+            // Body
+            const body = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.8), mat);
+            body.position.y = 0.4;
+            
+            // Head
+            const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), mat);
+            head.position.set(0, 0.65, 0.4);
+            const snout = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.2, 0.2), mat);
+            snout.position.set(0, 0.6, 0.7);
+            
+            // Tail
+            const tail = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.25, 0.5), mat);
+            tail.position.set(0, 0.5, -0.55);
+            tail.rotation.x = -0.3;
+            
+            // Legs (4)
+            const legSize = 0.15;
+            for(let x = -0.1; x <= 0.1; x += 0.2) {
+                for(let z = -0.25; z <= 0.25; z += 0.5) {
+                    const l = new THREE.Mesh(new THREE.BoxGeometry(legSize, 0.3, legSize), mat);
+                    l.position.set(x, 0.15, z);
+                    g.add(l);
+                }
+            }
+            
+            g.add(body, head, snout, tail);
             // DEBUG SHIELD (Normally hidden)
             const shield = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2, 1.5), new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true, transparent: true, opacity: 0.2 }));
             shield.position.y = 1; g.add(shield);
@@ -263,11 +335,32 @@
 
         function createSlimeEnemy() {
             const g = new THREE.Group();
-            const slimeMat = new THREE.MeshStandardMaterial({ color: 0x00ff00, transparent: true, opacity: 0.8 });
-            const body = new THREE.Mesh(new THREE.SphereGeometry(0.5, 8, 8), slimeMat);
-            body.position.y = 0.5;
+            const mat = new THREE.MeshStandardMaterial({ color: 0x2e7d32, transparent: true, opacity: 0.9 });
+            const darkMat = new THREE.MeshStandardMaterial({ color: 0x1b5e20 });
+            
+            // Creeper Body
+            const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.9, 0.3), mat);
+            body.position.y = 0.75;
+            
+            // Creeper Head
+            const head = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.6, 0.6), mat);
+            head.position.y = 1.5;
+            
+            // Creeper Legs (4)
+            const legSize = 0.25;
+            for(let x = -0.15; x <= 0.15; x += 0.3) {
+                for(let z = -0.15; z <= 0.15; z += 0.3) {
+                    const l = new THREE.Mesh(new THREE.BoxGeometry(legSize, 0.3, legSize), darkMat);
+                    l.position.set(x, 0.15, z);
+                    g.add(l);
+                }
+            }
+            
+            g.add(body, head);
+            g.userData = { type: 'enemy' };
+            // Ensure child meshes also have the userData for raycasting/collision if needed
             body.userData = { type: 'enemy' };
-            g.add(body);
+            head.userData = { type: 'enemy' };
             return g;
         }
 
@@ -302,29 +395,33 @@
             const woodMat = new THREE.MeshStandardMaterial({ color: 0x5d4037 });
             const darkWoodMat = new THREE.MeshStandardMaterial({ color: 0x3e2723 });
             
-            // Hull segments for a curved look
+            // Much Wider Hull segments
             for(let i = 0; i < 5; i++) {
-                const s = new THREE.Mesh(new THREE.BoxGeometry(1, 0.8, 1.5 - (Math.abs(i-2) * 0.4)), woodMat);
+                const s = new THREE.Mesh(new THREE.BoxGeometry(1, 0.8, 4.5 - (Math.abs(i-2) * 1.0)), woodMat);
                 s.position.set(i - 2, 0, 0);
                 group.add(s);
             }
             
-            // Prow and Stern - pointed ends
-            const prow = new THREE.Mesh(new THREE.ConeGeometry(0.7, 1.2, 4), woodMat);
-            prow.rotation.z = -Math.PI/2; prow.position.set(2.8, 0.2, 0); prow.scale.set(1, 1, 0.4);
-            const stern = new THREE.Mesh(new THREE.ConeGeometry(0.7, 1.0, 4), woodMat);
-            stern.rotation.z = Math.PI/2; stern.position.set(-2.6, 0.1, 0); stern.scale.set(1, 1, 0.4);
+            // Prow and Stern
+            const prow = new THREE.Mesh(new THREE.ConeGeometry(2.0, 1.2, 4), woodMat);
+            prow.rotation.z = -Math.PI/2; prow.position.set(2.8, 0.2, 0); prow.scale.set(1, 1, 0.8);
+            const stern = new THREE.Mesh(new THREE.ConeGeometry(2.0, 1.0, 4), woodMat);
+            stern.rotation.z = Math.PI/2; stern.position.set(-2.6, 0.1, 0); stern.scale.set(1, 1, 0.8);
             group.add(prow, stern);
+
+            // Floor (Walkable)
+            const floor = new THREE.Mesh(new THREE.BoxGeometry(4, 0.2, 3.5), woodMat);
+            floor.position.y = 0.3;
+            group.add(floor);
 
             // Mast
             const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.1, 3.5, 8), darkWoodMat);
             mast.position.y = 1.7;
-            const cross = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 2, 8), darkWoodMat);
+            const cross = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 3, 8), darkWoodMat);
             cross.rotation.z = Math.PI/2; cross.position.y = 2.8;
             group.add(mast, cross);
 
             group.position.y = 0.2;
-            group.scale.set(0.8, 0.8, 0.8);
             return group;
         }
 
@@ -464,7 +561,19 @@
             // Boat
             boatMesh = createBoat();
             boatAngle = Math.random() * Math.PI * 2;
+            boatRadius = (moatIn + moatOut) / 2;
+            boatState = 'patrol';
             scene.add(boatMesh); entities.push(boatMesh);
+
+            // Ferryman at Moat Edge
+            ferrymanAngle = Math.PI * 0.75; // Pre-set angle for the ferryman
+            const fx = mazeCenter + Math.cos(ferrymanAngle) * (moatIn - 1.5);
+            const fz = mazeCenter + Math.sin(ferrymanAngle) * (moatIn - 1.5);
+            const ferryman = createFerryman();
+            ferryman.position.set(fx, 0, fz);
+            ferryman.rotation.y = -ferrymanAngle + Math.PI;
+            ferryman.userData = { type: 'math', difficulty: 2, isFerryman: true };
+            scene.add(ferryman); interactables.push(ferryman); entities.push(ferryman);
 
             // Trees
             for (let i = 0; i < 120; i++) {
@@ -593,6 +702,20 @@
         window.addEventListener('keyup', e => keysDown[e.code] = false);
 
         function handleGrab() {
+            // DISEMBARK LOGIC (Fixed for SPACE and Refined Distance)
+            if (isPlayerOnBoat && atShore && waterBounds) {
+                isPlayerOnBoat = false; boatState = 'stopped'; 
+                lastDisembark = Date.now(); // Prevent instant re-boarding
+                const dir = atShore === 'inner' ? -5 : 5; // Long jump to safety
+                const dx = camera.position.x - waterBounds.center;
+                const dz = camera.position.z - waterBounds.center;
+                const angle = Math.atan2(dz, dx);
+                camera.position.x += Math.cos(angle) * dir;
+                camera.position.z += Math.sin(angle) * dir;
+                showMsg("DISEMBARKED");
+                return;
+            }
+
             handGroup.visible = true; handGroup.position.z = -1.8;
             fingers.forEach(f => f.rotation.x = -Math.PI / 3);
             const ray = new THREE.Raycaster();
@@ -664,7 +787,12 @@
                     if (e.key === 'Enter') {
                         if (parseInt(input.value) === ans) {
                             gold += reward; showMsg("CORRECT! +" + reward + " GOLD"); sfx.win();
-                            scene.remove(obj); interactables = interactables.filter(i => i !== obj);
+                            if (obj.userData.isFerryman) {
+                                boatState = 'drifting';
+                                showMsg("FERRYMAN SUMMONS THE BOAT!");
+                            } else {
+                                scene.remove(obj); interactables = interactables.filter(i => i !== obj);
+                            }
                         } else { 
                             showMsg("WRONG! -1 LIFE"); sfx.fail(); 
                             handleDeath();
@@ -698,7 +826,7 @@
 
         function handleDeath(msg = "TOUCHED ENEMY! -1 LIFE") {
             if (isDead) return;
-            isDead = true; 
+            isDead = true; isPlayerOnBoat = false; 
             lives--; updateHUD();
             showMsg(msg);
             sfx.hurt();
@@ -763,10 +891,13 @@
                     camera.position.y -= 0.01;
                 } else {
                     const old = camera.position.clone();
-                    if (keysDown['ArrowUp'] || keysDown['KeyW']) camera.translateZ(-0.13);
-                    if (keysDown['ArrowDown'] || keysDown['KeyS']) camera.translateZ(0.13);
-                    if (keysDown['ArrowLeft'] || keysDown['KeyA']) camera.rotation.y += 0.045;
-                    if (keysDown['ArrowRight'] || keysDown['KeyD']) camera.rotation.y -= 0.045;
+                    // Disable normal walking if on boat to prevent falling off
+                    if (!isPlayerOnBoat) {
+                        if (keysDown['ArrowUp'] || keysDown['KeyW']) camera.translateZ(-0.13);
+                        if (keysDown['ArrowDown'] || keysDown['KeyS']) camera.translateZ(0.13);
+                        if (keysDown['ArrowLeft'] || keysDown['KeyA']) camera.rotation.y += 0.045;
+                        if (keysDown['ArrowRight'] || keysDown['KeyD']) camera.rotation.y -= 0.045;
+                    }
 
                     const playerBB = new THREE.Box3().setFromCenterAndSize(camera.position, new THREE.Vector3(1.2, 1, 1.2));
                     for (let w of collidables) {
@@ -806,7 +937,7 @@
                     }
 
                     // --- MOAT CHECK ---
-                    if (waterBounds && Date.now() - lastHit > 1000) {
+                    if (waterBounds && Date.now() - lastHit > 1000 && !isPlayerOnBoat) {
                         const dx = camera.position.x - waterBounds.center;
                         const dz = camera.position.z - waterBounds.center;
                         const dist = Math.sqrt(dx*dx + dz*dz);
@@ -818,14 +949,61 @@
                 }
             }
 
-            // Boat Animation
+            // Boat Animation & Movement
             if (boatMesh && waterBounds) {
-                boatAngle += 0.0007; // Much slower
-                const r = (waterBounds.in + waterBounds.out) / 2;
-                boatMesh.position.x = waterBounds.center + Math.cos(boatAngle) * r;
-                boatMesh.position.z = waterBounds.center + Math.sin(boatAngle) * r;
-                boatMesh.rotation.y = -boatAngle + Math.PI/2; // Oriented correctly
+                const oldBoatX = boatMesh.position.x;
+                const oldBoatZ = boatMesh.position.z;
+
+                if (boatState === 'patrol') {
+                    boatAngle += 0.0007;
+                } else if (boatState === 'drifting') {
+                    let diff = (ferrymanAngle - boatAngle) % (Math.PI * 2);
+                    if (diff < -Math.PI) diff += Math.PI * 2;
+                    if (diff > Math.PI) diff -= Math.PI * 2;
+                    if (Math.abs(diff) < 0.01) {
+                        boatState = 'stopped';
+                        boatRadius = waterBounds.in + 1.2;
+                        showMsg("THE BOAT HAS ARRIVED! BOARD TO SAIL.");
+                    } else {
+                        boatAngle += Math.sign(diff) * 0.005;
+                    }
+                }
+
+                // Sailing Input
+                if (isPlayerOnBoat) {
+                    if (keysDown['ArrowLeft'] || keysDown['KeyA']) boatAngle -= 0.01;
+                    if (keysDown['ArrowRight'] || keysDown['KeyD']) boatAngle += 0.01;
+                    if (keysDown['ArrowUp'] || keysDown['KeyW']) boatRadius += 0.2;
+                    if (keysDown['ArrowDown'] || keysDown['KeyS']) boatRadius -= 0.2;
+                    
+                    boatRadius = Math.max(waterBounds.in + 1.2, Math.min(waterBounds.out - 1.2, boatRadius));
+                    
+                    atShore = null;
+                    if (boatRadius > waterBounds.out - 2.8) { showMsg("OUTER SHORE - SPACE TO EXIT"); atShore = 'outer'; }
+                    if (boatRadius < waterBounds.in + 2.8) { showMsg("INNER SHORE - SPACE TO EXIT"); atShore = 'inner'; }
+                }
+                
+                // Position boat
+                boatMesh.position.x = waterBounds.center + Math.cos(boatAngle) * boatRadius;
+                boatMesh.position.z = waterBounds.center + Math.sin(boatAngle) * boatRadius;
+                boatMesh.rotation.y = -boatAngle + Math.PI/2;
                 boatMesh.position.y = 0.15 + (Math.sin(Date.now() * 0.001) * 0.06); 
+
+                // Carrier logic
+                const pXZ = new THREE.Vector2(camera.position.x, camera.position.z);
+                const bXZ = new THREE.Vector2(boatMesh.position.x, boatMesh.position.z);
+                const distToBoat = pXZ.distanceTo(bXZ);
+
+                if (!isPlayerOnBoat) {
+                    if ((boatState === 'stopped' || boatState === 'sailing') && distToBoat < 4.0 && Date.now() - lastDisembark > 2000) {
+                        isPlayerOnBoat = true; boatState = 'sailing'; 
+                        camera.position.x = boatMesh.position.x;
+                        camera.position.z = boatMesh.position.z;
+                    }
+                } else {
+                    camera.position.x += (boatMesh.position.x - oldBoatX);
+                    camera.position.z += (boatMesh.position.z - oldBoatZ);
+                }
             }
 
             entities.forEach(i => { if (i.userData.type === 'exit') i.rotation.y += 0.05; });
