@@ -121,6 +121,24 @@
             justify-content: space-between;
             margin-bottom: 3px;
         }
+
+        #death-overlay {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(180, 0, 0, 0);
+            display: flex; flex-direction: column;
+            justify-content: center; align-items: center;
+            z-index: 1000;
+            pointer-events: none;
+            transition: background 2s ease;
+            opacity: 0;
+        }
+        #death-text {
+            color: #fff; font-size: 48px; font-weight: bold;
+            text-shadow: 4px 4px 0 #000;
+            transform: scale(0.5);
+            transition: all 2.5s ease;
+        }
     </style>
 </head>
 
@@ -152,6 +170,9 @@
     </div>
 
     <div id="msg"></div>
+    <div id="death-overlay">
+        <div id="death-text">Wasted</div>
+    </div>
 
     <script type="importmap">
         { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
@@ -161,9 +182,9 @@
         import * as THREE from 'three';
 
         // --- CORE STATE ---
-        let gold = 0, lives = 3, bombs = 0, currentLevel = 1, inventory = [], isMathActive = false, lastHit = 0;
+        let gold = 0, lives = 3, bombs = 1, currentLevel = 1, inventory = [], isMathActive = false, lastHit = 0, isDead = false;
         const GRID_SIZE = 17, CELL = 4, KEY_PRICE = 150, BOMB_PRICE = 75;
-        let mazeData = [], explored = [], discoveredItems = [], collidables = [], interactables = [], entities = [], fingers = [], enemies = [];
+        let mazeData = [], explored = [], discoveredItems = [], collidables = [], interactables = [], entities = [], fingers = [], enemies = [], waterBounds = null;
 
         // --- AUDIO ENGINE ---
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -221,7 +242,8 @@
             const head = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.6, 0.6), skin); head.position.y = 1.4;
             const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.8, 0.3), new THREE.MeshStandardMaterial({ color: colors[difficulty-1] })); body.position.y = 0.7;
             g.add(head, body);
-            const shield = new THREE.Mesh(new THREE.BoxGeometry(3, 4, 3), new THREE.MeshBasicMaterial({ visible: false }));
+            // DEBUG SHIELD (Normally hidden)
+            const shield = new THREE.Mesh(new THREE.BoxGeometry(1.2, 3, 1.2), new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true, transparent: true, opacity: 0.2 }));
             shield.position.y = 1.5; g.add(shield);
             return g;
         }
@@ -233,8 +255,9 @@
             const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.8), mat);
             const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), mat); head.position.set(0, 0.4, 0.4);
             g.add(body, head);
-            const shield = new THREE.Mesh(new THREE.BoxGeometry(3, 4, 3), new THREE.MeshBasicMaterial({ visible: false }));
-            shield.position.y = 1.5; g.add(shield);
+            // DEBUG SHIELD (Normally hidden)
+            const shield = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2, 1.5), new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true, transparent: true, opacity: 0.2 }));
+            shield.position.y = 1; g.add(shield);
             return g;
         }
 
@@ -246,6 +269,18 @@
             body.userData = { type: 'enemy' };
             g.add(body);
             return g;
+        }
+
+        function createTree() {
+            const group = new THREE.Group();
+            const trunkMat = new THREE.MeshStandardMaterial({ color: 0x5d4037 });
+            const leavesMat = new THREE.MeshStandardMaterial({ color: 0x2e7d32 });
+            const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.3, 1.5, 8), trunkMat);
+            trunk.position.y = 0.75;
+            const leaves = new THREE.Mesh(new THREE.ConeGeometry(1, 2, 8), leavesMat);
+            leaves.position.y = 2.2;
+            group.add(trunk, leaves);
+            return group;
         }
 
         function createGhostEnemy() {
@@ -293,6 +328,11 @@
         }
 
         function startLevel() {
+            isDead = false;
+            document.getElementById('death-overlay').style.opacity = 0;
+            document.getElementById('death-overlay').style.background = 'rgba(180, 0, 0, 0)';
+            document.getElementById('death-text').style.transform = 'scale(0.5)';
+            // ... (rest as before)
             // Clean up old scene
             entities.forEach(e => scene.remove(e));
             collidables.forEach(w => scene.remove(w));
@@ -357,11 +397,12 @@
             });
             const floorMat = new THREE.MeshStandardMaterial({ map: tex.load('https://threejs.org/examples/textures/terrain/grasslight-big.jpg') });
 
+            // Maze Floor & Walls
             for (let y = 0; y < GRID_SIZE; y++) {
                 for (let x = 0; x < GRID_SIZE; x++) {
                     const f = new THREE.Mesh(new THREE.PlaneGeometry(CELL, CELL), floorMat);
                     f.rotation.x = -Math.PI / 2; f.position.set(x * CELL, 0, y * CELL);
-                    scene.add(f); entities.push(f); // Floors are just entities (visual only)
+                    scene.add(f); entities.push(f);
 
                     if (mazeData[y][x] === 1) {
                         const w = new THREE.Mesh(new THREE.BoxGeometry(CELL, CELL, CELL), wallMat);
@@ -370,6 +411,37 @@
                         scene.add(w); collidables.push(w);
                     }
                 }
+            }
+
+            // Outside Area & Moat
+            const worldSize = 300;
+            const mazeCenter = (GRID_SIZE * CELL) / 2 - (CELL / 2);
+            const worldPlane = new THREE.Mesh(new THREE.PlaneGeometry(worldSize, worldSize), floorMat);
+            worldPlane.rotation.x = -Math.PI / 2; worldPlane.position.set(mazeCenter, -0.05, mazeCenter);
+            scene.add(worldPlane); entities.push(worldPlane);
+
+            const moatIn = (GRID_SIZE * CELL) / 2 + 25; // More grass space!
+            const moatOut = moatIn + 20;
+            waterBounds = { in: moatIn, out: moatOut, center: mazeCenter };
+
+            const waterMat = new THREE.MeshStandardMaterial({ color: 0x0044ff, transparent: true, opacity: 0.7 });
+            const waterGeom = new THREE.RingGeometry(moatIn, moatOut, 64);
+            const moat = new THREE.Mesh(waterGeom, waterMat);
+            moat.rotation.x = -Math.PI / 2; moat.position.set(mazeCenter, 0.1, mazeCenter);
+            scene.add(moat); entities.push(moat);
+
+            // Trees
+            for (let i = 0; i < 100; i++) {
+                const angle = Math.random() * Math.PI * 2;
+                const mazeOuterLimit = (GRID_SIZE * CELL) / 2 + 5;
+                // Trees only spawn between mazeOuterLimit and moatIn, or outside moatOut
+                const inZone = Math.random() > 0.4;
+                const dist = inZone 
+                    ? (mazeOuterLimit + Math.random() * (moatIn - mazeOuterLimit - 8))
+                    : (moatOut + 10 + Math.random() * 80);
+                const tree = createTree();
+                tree.position.set(mazeCenter + Math.cos(angle) * dist, 0, mazeCenter + Math.sin(angle) * dist);
+                scene.add(tree); entities.push(tree);
             }
 
             // NPCs
@@ -416,8 +488,8 @@
             const exit = new THREE.Mesh(new THREE.TorusKnotGeometry(0.4, 0.12), new THREE.MeshStandardMaterial({ color: 0xffd700 }));
             exit.position.set(trophy.x * CELL, 1.5, trophy.y * CELL);
             exit.userData = { type: 'exit', color: 0xffd700 };
-            const exitShield = new THREE.Mesh(new THREE.BoxGeometry(3, 4, 3), new THREE.MeshBasicMaterial({ visible: false }));
-            exit.add(exitShield);
+            const shield = new THREE.Mesh(new THREE.BoxGeometry(1.5, 6, 1.5), new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true, transparent: true, opacity: 0.2 }));
+            exit.add(shield);
             scene.add(exit); interactables.push(exit); entities.push(exit);
 
             camera.position.set(CELL, 2, CELL);
@@ -429,23 +501,13 @@
         function spawnKeyShop(gx, gy, id, col) {
             const group = new THREE.Group();
             const mat = new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.4 });
-            
-            // Key Stem
-            const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.7, 8), mat);
-            stem.rotation.x = Math.PI/2;
-            
-            // Key Ring
-            const ring = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.04, 8, 16), mat);
-            ring.position.z = 0.35;
-            
-            // Key Bit
-            const bit = new THREE.Mesh(new THREE.BoxGeometry(0.12,0.18,0.06), mat);
-            bit.position.set(0.08, 0, -0.28);
-            
+            const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.7, 8), mat); stem.rotation.x = Math.PI/2;
+            const ring = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.04, 8, 16), mat); ring.position.z = 0.35;
+            const bit = new THREE.Mesh(new THREE.BoxGeometry(0.12,0.18,0.06), mat); bit.position.set(0.08, 0, -0.28);
             group.add(stem, ring, bit);
             group.position.set(gx * CELL, 1.5, gy * CELL);
             group.userData = { type: 'shop', id, price: KEY_PRICE, color: col };
-            const shield = new THREE.Mesh(new THREE.BoxGeometry(4, 5, 4), new THREE.MeshBasicMaterial({ visible: false }));
+            const shield = new THREE.Mesh(new THREE.BoxGeometry(1.5, 7, 1.5), new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true, transparent: true, opacity: 0.2 }));
             group.add(shield); scene.add(group); interactables.push(group); entities.push(group);
         }
 
@@ -457,7 +519,7 @@
             group.add(bomb, wick);
             group.position.set(gx * CELL, 1, gy * CELL);
             group.userData = { type: 'shop', id: 'Bomb', price: BOMB_PRICE, color: 0x333333 };
-            const shield = new THREE.Mesh(new THREE.BoxGeometry(4, 5, 4), new THREE.MeshBasicMaterial({ visible: false }));
+            const shield = new THREE.Mesh(new THREE.BoxGeometry(1.5, 7, 1.5), new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true, transparent: true, opacity: 0.2 }));
             group.add(shield); scene.add(group); interactables.push(group); entities.push(group);
         }
 
@@ -486,7 +548,7 @@
             const ray = new THREE.Raycaster();
             ray.setFromCamera(new THREE.Vector2(0, 0), camera);
             const hits = ray.intersectObjects(interactables, true);
-            if (hits.length > 0 && hits[0].distance < 8.5) {
+            if (hits.length > 0 && hits[0].distance < 2.5) {
                 let obj = hits[0].object;
                 while (obj.parent && !obj.userData.type) obj = obj.parent;
                 if (obj.userData.type) processLogic(obj);
@@ -553,7 +615,10 @@
                         if (parseInt(input.value) === ans) {
                             gold += reward; showMsg("CORRECT! +" + reward + " GOLD"); sfx.win();
                             scene.remove(obj); interactables = interactables.filter(i => i !== obj);
-                        } else { lives--; showMsg("WRONG! -1 LIFE"); sfx.fail(); if (lives <= 0) location.reload(); }
+                        } else { 
+                            showMsg("WRONG! -1 LIFE"); sfx.fail(); 
+                            handleDeath();
+                        }
                         isMathActive = false; document.getElementById('math-ui').style.display = 'none';
                         updateHUD(); window.removeEventListener('keydown', check);
                     }
@@ -580,6 +645,33 @@
             m.style.display = (m.style.display === 'block') ? 'none' : 'block';
             if (m.style.display === 'block') drawMap();
         };
+
+        function handleDeath(msg = "TOUCHED ENEMY! -1 LIFE") {
+            if (isDead) return;
+            isDead = true; 
+            lives--; updateHUD();
+            showMsg(msg);
+            sfx.hurt();
+            
+            const overlay = document.getElementById('death-overlay');
+            const txt = document.getElementById('death-text');
+            overlay.style.opacity = 1;
+            overlay.style.background = 'rgba(180, 0, 0, 0.7)';
+            txt.style.transform = 'scale(1.5)';
+
+            setTimeout(() => {
+                if (lives <= 0) {
+                    location.reload();
+                } else {
+                    camera.position.set(CELL, 2, CELL);
+                    camera.rotation.set(0, 0, 0);
+                    isDead = false;
+                    overlay.style.opacity = 0;
+                    overlay.style.background = 'rgba(180, 0, 0, 0)';
+                    txt.style.transform = 'scale(0.5)';
+                }
+            }, 3000);
+        }
 
         function drawMap() {
             const canvas = document.getElementById('map-canvas');
@@ -616,50 +708,63 @@
         function animate() {
             requestAnimationFrame(animate);
             if (!isMathActive) {
-                const old = camera.position.clone();
-                if (keysDown['ArrowUp'] || keysDown['KeyW']) camera.translateZ(-0.13);
-                if (keysDown['ArrowDown'] || keysDown['KeyS']) camera.translateZ(0.13);
-                if (keysDown['ArrowLeft'] || keysDown['KeyA']) camera.rotation.y += 0.045;
-                if (keysDown['ArrowRight'] || keysDown['KeyD']) camera.rotation.y -= 0.045;
+                if (isDead) {
+                    camera.rotation.z += 0.01;
+                    camera.position.y -= 0.01;
+                } else {
+                    const old = camera.position.clone();
+                    if (keysDown['ArrowUp'] || keysDown['KeyW']) camera.translateZ(-0.13);
+                    if (keysDown['ArrowDown'] || keysDown['KeyS']) camera.translateZ(0.13);
+                    if (keysDown['ArrowLeft'] || keysDown['KeyA']) camera.rotation.y += 0.045;
+                    if (keysDown['ArrowRight'] || keysDown['KeyD']) camera.rotation.y -= 0.045;
 
-                const playerBB = new THREE.Box3().setFromCenterAndSize(camera.position, new THREE.Vector3(1.2, 1, 1.2));
-                for (let w of collidables) {
-                    if (playerBB.intersectsBox(new THREE.Box3().setFromObject(w))) { camera.position.copy(old); break; }
-                }
-
-                enemies.forEach(en => {
-                    const d = en.userData;
-                    en.position.add(d.dir.clone().multiplyScalar(d.speed));
-                    const enBB = new THREE.Box3().setFromCenterAndSize(en.position, new THREE.Vector3(1, 1, 1));
-                    let hit = false;
+                    const playerBB = new THREE.Box3().setFromCenterAndSize(camera.position, new THREE.Vector3(1.2, 1, 1.2));
                     for (let w of collidables) {
-                        if (enBB.intersectsBox(new THREE.Box3().setFromObject(w))) { hit = true; break; }
+                        if (playerBB.intersectsBox(new THREE.Box3().setFromObject(w))) { camera.position.copy(old); break; }
                     }
-                    if (hit) {
-                        en.position.sub(d.dir.clone().multiplyScalar(d.speed));
-                        const dirs = [new THREE.Vector3(1, 0, 0), new THREE.Vector3(-1, 0, 0), new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, -1)];
-                        d.dir = dirs[Math.floor(Math.random() * dirs.length)];
-                    }
-                    
-                    // --- PLAYER COLLISION CHECK ---
-                    // Calculate distance on the XZ plane (ignore Y/height)
-                    const pPos = new THREE.Vector2(camera.position.x, camera.position.z);
-                    const ePos = new THREE.Vector2(en.position.x, en.position.z);
-                    const distXZ = pPos.distanceTo(ePos);
-                    
-                    if (Date.now() - lastHit > 1000 && (distXZ < 1.8 || playerBB.intersectsBox(enBB))) {
-                        console.log("COLLIDED! Distance:", distXZ.toFixed(2));
-                        lastHit = Date.now(); sfx.hurt();
-                        lives--; updateHUD(); showMsg("TOUCHED ENEMY! -1 LIFE");
-                        camera.position.set(CELL, 2, CELL);
-                        camera.rotation.set(0, 0, 0); // Reset view
-                        if (lives <= 0) location.reload();
-                    }
-                });
 
-                const gx = Math.round(camera.position.x / CELL), gy = Math.round(camera.position.z / CELL);
-                if (gx >= 0 && gx < GRID_SIZE && gy >= 0 && gy < GRID_SIZE) {
-                    explored[gy][gx] = true;
+                    enemies.forEach(en => {
+                        const d = en.userData;
+                        en.position.add(d.dir.clone().multiplyScalar(d.speed));
+                        const enBB = new THREE.Box3().setFromCenterAndSize(en.position, new THREE.Vector3(1, 1, 1));
+                        
+                        // --- PLAYER COLLISION CHECK ---
+                        const pPos = new THREE.Vector2(camera.position.x, camera.position.z);
+                        const ePos = new THREE.Vector2(en.position.x, en.position.z);
+                        const distXZ = pPos.distanceTo(ePos);
+                        
+                        if (Date.now() - lastHit > 1000 && (distXZ < 1.8 || playerBB.intersectsBox(enBB))) {
+                            lastHit = Date.now();
+                            handleDeath("TOUCHED ENEMY! -1 LIFE");
+                        }
+
+                        // Enemy wall bounce
+                        let hit = false;
+                        for (let w of collidables) {
+                            if (enBB.intersectsBox(new THREE.Box3().setFromObject(w))) { hit = true; break; }
+                        }
+                        if (hit) {
+                            en.position.sub(d.dir.clone().multiplyScalar(d.speed));
+                            const dirs = [new THREE.Vector3(1, 0, 0), new THREE.Vector3(-1, 0, 0), new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0, -1)];
+                            d.dir = dirs[Math.floor(Math.random() * dirs.length)];
+                        }
+                    });
+
+                    const gx = Math.round(camera.position.x / CELL), gy = Math.round(camera.position.z / CELL);
+                    if (gx >= 0 && gx < GRID_SIZE && gy >= 0 && gy < GRID_SIZE) {
+                        explored[gy][gx] = true;
+                    }
+
+                    // --- MOAT CHECK ---
+                    if (waterBounds && Date.now() - lastHit > 1000) {
+                        const dx = camera.position.x - waterBounds.center;
+                        const dz = camera.position.z - waterBounds.center;
+                        const dist = Math.sqrt(dx*dx + dz*dz);
+                        if (dist > waterBounds.in && dist < waterBounds.out) {
+                            lastHit = Date.now();
+                            handleDeath("FELL IN THE MOAT! -1 LIFE");
+                        }
+                    }
                 }
             }
             entities.forEach(i => { if (i.userData.type === 'exit') i.rotation.y += 0.05; });
