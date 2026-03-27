@@ -182,7 +182,7 @@
         import * as THREE from 'three';
 
         // --- CORE STATE ---
-        let gold = 0, lives = 3, bombs = 1, currentLevel = 1, inventory = [], isMathActive = false, lastHit = 0, isDead = false;
+        let gold = 0, lives = 3, bombs = 1, currentLevel = 1, inventory = [], isMathActive = false, lastHit = 0, isDead = false, startRotation = 0;
         const GRID_SIZE = 17, CELL = 4, KEY_PRICE = 150, BOMB_PRICE = 75;
         let mazeData = [], explored = [], discoveredItems = [], collidables = [], interactables = [], entities = [], fingers = [], enemies = [], waterBounds = null;
 
@@ -431,16 +431,21 @@
             scene.add(moat); entities.push(moat);
 
             // Trees
-            for (let i = 0; i < 100; i++) {
+            for (let i = 0; i < 120; i++) {
                 const angle = Math.random() * Math.PI * 2;
-                const mazeOuterLimit = (GRID_SIZE * CELL) / 2 + 5;
-                // Trees only spawn between mazeOuterLimit and moatIn, or outside moatOut
-                const inZone = Math.random() > 0.4;
-                const dist = inZone 
-                    ? (mazeOuterLimit + Math.random() * (moatIn - mazeOuterLimit - 8))
-                    : (moatOut + 10 + Math.random() * 80);
+                const mazeBox = (GRID_SIZE * CELL) / 2 + 5; // Distance from center to avoid grid
+                const distIn = mazeBox + Math.random() * (moatIn - mazeBox - 5);
+                const distOut = moatOut + 10 + Math.random() * 60;
+                const dist = Math.random() > 0.4 ? distOut : distIn;
+                
+                const tx = mazeCenter + Math.cos(angle) * dist;
+                const tz = mazeCenter + Math.sin(angle) * dist;
+                
+                // Final safety check: skip if somehow inside the actual maze square
+                if (Math.abs(tx - mazeCenter) < mazeBox && Math.abs(tz - mazeCenter) < mazeBox) { i--; continue; }
+
                 const tree = createTree();
-                tree.position.set(mazeCenter + Math.cos(angle) * dist, 0, mazeCenter + Math.sin(angle) * dist);
+                tree.position.set(tx, 0, tz);
                 scene.add(tree); entities.push(tree);
             }
 
@@ -474,7 +479,7 @@
                     const p = zone[Math.floor(Math.random() * zone.length)];
                     const distToSpawn = Math.abs(p.x - 1) + Math.abs(p.y - 1);
                     const posKey = `${p.x},${p.y}`;
-                    if (distToSpawn < 5 || occupied.has(posKey)) { i--; continue; } 
+                    if (distToSpawn < 10 || occupied.has(posKey)) { i--; continue; } 
                     occupied.add(posKey);
                     const enemy = Math.random() > 0.5 ? createSlimeEnemy() : createGhostEnemy();
                     enemy.position.set(p.x * CELL, 0, p.y * CELL);
@@ -493,7 +498,16 @@
             scene.add(exit); interactables.push(exit); entities.push(exit);
 
             camera.position.set(CELL, 2, CELL);
-            camera.rotation.set(0, 0, 0);
+            
+            // Dynamic Rotation: Face the first path step
+            if (mainPath.length > 0) {
+                const firstStep = mainPath[0];
+                startRotation = Math.atan2((firstStep.x * CELL) - (1 * CELL), (firstStep.y * CELL) - (1 * CELL));
+                camera.rotation.set(0, startRotation + Math.PI, 0); // Corrected facing
+            } else {
+                camera.rotation.set(0, Math.PI, 0);
+            }
+            
             updateHUD();
             showMsg("LEVEL " + currentLevel + ": FIND GOLD FOR RED KEY");
         }
@@ -664,7 +678,7 @@
                     location.reload();
                 } else {
                     camera.position.set(CELL, 2, CELL);
-                    camera.rotation.set(0, 0, 0);
+                    camera.rotation.set(0, startRotation + Math.PI, 0); 
                     isDead = false;
                     overlay.style.opacity = 0;
                     overlay.style.background = 'rgba(180, 0, 0, 0)';
