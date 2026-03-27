@@ -214,24 +214,26 @@
         scene.add(camera);
 
         // --- NPC & ENEMY BUILDERS ---
-        function createHumanNPC() {
+        function createHumanNPC(difficulty = 1) {
+            const colors = [0x44ff44, 0xffff44, 0xff4444]; // Green, Yellow, Red
             const g = new THREE.Group();
             const skin = new THREE.MeshStandardMaterial({ color: 0xdbac82 });
             const head = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.6, 0.6), skin); head.position.y = 1.4;
-            const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.8, 0.3), new THREE.MeshStandardMaterial({ color: 0x00aaff })); body.position.y = 0.7;
+            const body = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.8, 0.3), new THREE.MeshStandardMaterial({ color: colors[difficulty-1] })); body.position.y = 0.7;
             g.add(head, body);
-            const shield = new THREE.Mesh(new THREE.BoxGeometry(2, 3, 2), new THREE.MeshBasicMaterial({ visible: false }));
+            const shield = new THREE.Mesh(new THREE.BoxGeometry(3, 4, 3), new THREE.MeshBasicMaterial({ visible: false }));
             shield.position.y = 1.5; g.add(shield);
             return g;
         }
 
-        function createFoxNPC() {
+        function createFoxNPC(difficulty = 1) {
+            const colors = [0x44ff44, 0xffff44, 0xff4444];
             const g = new THREE.Group();
-            const orange = new THREE.MeshStandardMaterial({ color: 0xe67e22 });
-            const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.8), orange);
-            const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), orange); head.position.set(0, 0.4, 0.4);
+            const mat = new THREE.MeshStandardMaterial({ color: colors[difficulty-1] });
+            const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.8), mat);
+            const head = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.4, 0.4), mat); head.position.set(0, 0.4, 0.4);
             g.add(body, head);
-            const shield = new THREE.Mesh(new THREE.BoxGeometry(2, 3, 2), new THREE.MeshBasicMaterial({ visible: false }));
+            const shield = new THREE.Mesh(new THREE.BoxGeometry(3, 4, 3), new THREE.MeshBasicMaterial({ visible: false }));
             shield.position.y = 1.5; g.add(shield);
             return g;
         }
@@ -300,6 +302,7 @@
             explored = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(false));
 
             mazeData = generateMaze();
+            const occupied = new Set(["1,1"]);
 
             // Critical Path Calculation
             let q = [{ x: 1, y: 1, path: [] }], vis = new Set(["1,1"]), mainPath = [];
@@ -317,25 +320,32 @@
             const rDoor = mainPath[Math.floor(mainPath.length * 0.35)];
             const bDoor = mainPath[Math.floor(mainPath.length * 0.75)];
             const trophy = mainPath[mainPath.length - 1];
+            occupied.add(`${rDoor.x},${rDoor.y}`);
+            occupied.add(`${bDoor.x},${bDoor.y}`);
+            occupied.add(`${trophy.x},${trophy.y}`);
 
             // Build Zones
             const zone1 = getAccessibleCells(1, 1, rDoor.x, rDoor.y);
             const zone2 = getAccessibleCells(rDoor.x, rDoor.y, bDoor.x, bDoor.y);
-            console.log("Zone1 cells:", zone1.length, "Zone2 cells:", zone2.length);
 
             // Spawns
             spawnDoor(rDoor.x, rDoor.y, "Red Key", 0xff0000);
             spawnDoor(bDoor.x, bDoor.y, "Blue Key", 0x0000ff);
 
+            const getUnoccupied = (zone) => {
+                const filtered = zone.filter(p => !occupied.has(`${p.x},${p.y}`));
+                return filtered[Math.floor(Math.random() * filtered.length)];
+            };
+
             if (zone1.length > 0) {
-                const rk = zone1[Math.floor(Math.random() * zone1.length)];
-                spawnKeyShop(rk.x, rk.y, "Red Key", 0xff0000);
-                const bs1 = zone1[Math.floor(Math.random() * zone1.length)];
-                spawnBombShop(bs1.x, bs1.y);
+                const rk = getUnoccupied(zone1);
+                if (rk) { spawnKeyShop(rk.x, rk.y, "Red Key", 0xff0000); occupied.add(`${rk.x},${rk.y}`); }
+                const bs1 = getUnoccupied(zone1);
+                if (bs1) { spawnBombShop(bs1.x, bs1.y); occupied.add(`${bs1.x},${bs1.y}`); }
             }
             if (zone2.length > 0) {
-                const bk = zone2[Math.floor(Math.random() * zone2.length)];
-                spawnKeyShop(bk.x, bk.y, "Blue Key", 0x0000ff);
+                const bk = getUnoccupied(zone2);
+                if (bk) { spawnKeyShop(bk.x, bk.y, "Blue Key", 0x0000ff); occupied.add(`${bk.x},${bk.y}`); }
             }
 
             // Visual World
@@ -366,10 +376,13 @@
             const allWalkable = [...zone1, ...zone2, ...mainPath];
             allWalkable.forEach(p => {
                 const distToSpawn = Math.abs(p.x - 1) + Math.abs(p.y - 1);
-                if (Math.random() < 0.12 && distToSpawn > 2) {
-                    const npc = Math.random() > 0.4 ? createHumanNPC() : createFoxNPC();
+                const posKey = `${p.x},${p.y}`;
+                if (Math.random() < 0.12 && distToSpawn > 2 && !occupied.has(posKey)) {
+                    occupied.add(posKey);
+                    const diff = distToSpawn < 8 ? 1 : (distToSpawn < 15 ? 2 : 3);
+                    const npc = Math.random() > 0.4 ? createHumanNPC(diff) : createFoxNPC(diff);
                     npc.position.set(p.x * CELL, 0, p.y * CELL);
-                    npc.userData = { type: 'math' };
+                    npc.userData = { type: 'math', difficulty: diff };
                     scene.add(npc); interactables.push(npc); entities.push(npc);
                 }
             });
@@ -387,6 +400,10 @@
                 if (zone.length === 0) return;
                 for (let i = 0; i < count; i++) {
                     const p = zone[Math.floor(Math.random() * zone.length)];
+                    const distToSpawn = Math.abs(p.x - 1) + Math.abs(p.y - 1);
+                    const posKey = `${p.x},${p.y}`;
+                    if (distToSpawn < 5 || occupied.has(posKey)) { i--; continue; } 
+                    occupied.add(posKey);
                     const enemy = Math.random() > 0.5 ? createSlimeEnemy() : createGhostEnemy();
                     enemy.position.set(p.x * CELL, 0, p.y * CELL);
                     enemy.userData = { type: 'enemy', dir: new THREE.Vector3(1, 0, 0), speed: 0.04 + Math.random() * 0.04 };
@@ -412,19 +429,35 @@
         function spawnKeyShop(gx, gy, id, col) {
             const group = new THREE.Group();
             const mat = new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.4 });
-            const bit = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.7, 0.1), mat);
-            group.add(bit); group.position.set(gx * CELL, 1.5, gy * CELL);
+            
+            // Key Stem
+            const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.7, 8), mat);
+            stem.rotation.x = Math.PI/2;
+            
+            // Key Ring
+            const ring = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.04, 8, 16), mat);
+            ring.position.z = 0.35;
+            
+            // Key Bit
+            const bit = new THREE.Mesh(new THREE.BoxGeometry(0.12,0.18,0.06), mat);
+            bit.position.set(0.08, 0, -0.28);
+            
+            group.add(stem, ring, bit);
+            group.position.set(gx * CELL, 1.5, gy * CELL);
             group.userData = { type: 'shop', id, price: KEY_PRICE, color: col };
-            const shield = new THREE.Mesh(new THREE.BoxGeometry(3, 4, 3), new THREE.MeshBasicMaterial({ visible: false }));
+            const shield = new THREE.Mesh(new THREE.BoxGeometry(4, 5, 4), new THREE.MeshBasicMaterial({ visible: false }));
             group.add(shield); scene.add(group); interactables.push(group); entities.push(group);
         }
 
         function spawnBombShop(gx, gy) {
             const group = new THREE.Group();
-            const bomb = new THREE.Mesh(new THREE.BoxGeometry(0.6, 0.6, 0.6), new THREE.MeshStandardMaterial({ color: 0x333333 }));
-            group.add(bomb); group.position.set(gx * CELL, 1, gy * CELL);
+            const bomb = new THREE.Mesh(new THREE.SphereGeometry(0.4, 16, 16), new THREE.MeshStandardMaterial({ color: 0x333333 }));
+            const wick = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.2, 8), new THREE.MeshStandardMaterial({ color: 0x884422 }));
+            wick.position.y = 0.45;
+            group.add(bomb, wick);
+            group.position.set(gx * CELL, 1, gy * CELL);
             group.userData = { type: 'shop', id: 'Bomb', price: BOMB_PRICE, color: 0x333333 };
-            const shield = new THREE.Mesh(new THREE.BoxGeometry(3, 4, 3), new THREE.MeshBasicMaterial({ visible: false }));
+            const shield = new THREE.Mesh(new THREE.BoxGeometry(4, 5, 4), new THREE.MeshBasicMaterial({ visible: false }));
             group.add(shield); scene.add(group); interactables.push(group); entities.push(group);
         }
 
@@ -489,15 +522,36 @@
                 setTimeout(startLevel, 1500);
             } else if (d.type === 'math') {
                 isMathActive = true;
-                const a = Math.floor(Math.random() * 9) + 2, b = Math.floor(Math.random() * 9) + 2, ans = a * b;
-                document.getElementById('math-problem').innerText = `${a} x ${b} = ?`;
+                const diff = d.difficulty || 1;
+                let a, b, ans, op = 'x';
+                
+                if (currentLevel === 1) {
+                    const isAdd = Math.random() > 0.5;
+                    a = Math.floor(Math.random() * 10) + 1;
+                    b = Math.floor(Math.random() * 10) + 1;
+                    if (!isAdd && a < b) [a, b] = [b, a]; // No negative results
+                    op = isAdd ? '+' : '-';
+                    ans = isAdd ? a + b : a - b;
+                } else if (currentLevel === 2) {
+                    a = Math.floor(Math.random() * 6);
+                    b = Math.floor(Math.random() * 6);
+                    ans = a * b;
+                } else {
+                    const range = diff * 8;
+                    a = Math.floor(Math.random() * range) + 2;
+                    b = Math.floor(Math.random() * range) + 2;
+                    ans = a * b;
+                }
+
+                const reward = (20 * currentLevel) + (diff * 15);
+                document.getElementById('math-problem').innerText = `${a} ${op} ${b} = ?`;
                 document.getElementById('math-ui').style.display = 'flex';
                 const input = document.getElementById('math-input');
                 input.value = ''; input.focus();
                 const check = (e) => {
                     if (e.key === 'Enter') {
                         if (parseInt(input.value) === ans) {
-                            gold += 45; showMsg("CORRECT! +45 GOLD"); sfx.win();
+                            gold += reward; showMsg("CORRECT! +" + reward + " GOLD"); sfx.win();
                             scene.remove(obj); interactables = interactables.filter(i => i !== obj);
                         } else { lives--; showMsg("WRONG! -1 LIFE"); sfx.fail(); if (lives <= 0) location.reload(); }
                         isMathActive = false; document.getElementById('math-ui').style.display = 'none';
