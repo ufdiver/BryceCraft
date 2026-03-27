@@ -261,7 +261,7 @@
         import * as THREE from 'three';
 
         // --- CORE STATE ---
-        let gold = 0, lives = 3, bombs = 1, currentLevel = 1, inventory = [], isMathActive = false, lastHit = 0, isDead = false, startRotation = 0, boatMesh = null, boatAngle = 0;
+        let gold = 0, lives = 3, bombs = 0, currentLevel = 1, inventory = [], isMathActive = false, lastHit = 0, isDead = false, startRotation = 0, boatMesh = null, boatAngle = 0;
         let boatState = 'patrol', ferrymanAngle = 0, boatRadius = 0, isPlayerOnBoat = false, atShore = null, lastDisembark = 0; 
         let isGameStarted = false;
         const GRID_SIZE = 17, CELL = 4, KEY_PRICE = 150, BOMB_PRICE = 75;
@@ -346,9 +346,12 @@
             rLeg.position.set(0.15, 0.35, 0);
             
             g.add(head, body, lArm, rArm, lLeg, rLeg);
-            // DEBUG SHIELD (Normally hidden)
-            const shield = new THREE.Mesh(new THREE.BoxGeometry(1.2, 3, 1.2), new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true, transparent: true, opacity: 0.2 }));
-            shield.position.y = 1.5; g.add(shield);
+            Object.assign(g.userData, { head, lArm, rArm, lLeg, rLeg });
+            
+            const hitBox = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2.5, 1.2), new THREE.MeshBasicMaterial({ visible: false }));
+            hitBox.position.y = 1.25; hitBox.userData = g.userData; 
+            hitBox.userData.root = g;
+            g.add(hitBox);
             return g;
         }
 
@@ -370,8 +373,12 @@
             const rLeg = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.7, 0.25), pantMat); rLeg.position.set(0.15, 0.35, 0);
             
             g.add(head, hat, body, lArm, rArm, lLeg, rLeg);
-            const shield = new THREE.Mesh(new THREE.BoxGeometry(1.2, 3, 1.2), new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true, transparent: true, opacity: 0.2 }));
-            shield.position.y = 1.5; g.add(shield);
+            Object.assign(g.userData, { head, lArm, rArm, lLeg, rLeg, hat });
+            
+            const hitBox = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2.5, 1.2), new THREE.MeshBasicMaterial({ visible: false }));
+            hitBox.position.y = 1.25; hitBox.userData = g.userData; 
+            hitBox.userData.root = g;
+            g.add(hitBox);
             return g;
         }
 
@@ -407,9 +414,12 @@
             }
             
             g.add(body, head, snout, tail);
-            // DEBUG SHIELD (Normally hidden)
-            const shield = new THREE.Mesh(new THREE.BoxGeometry(1.2, 2, 1.5), new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true, transparent: true, opacity: 0.2 }));
-            shield.position.y = 1; g.add(shield);
+            Object.assign(g.userData, { head, tail, snout });
+            
+            const hitBox = new THREE.Mesh(new THREE.BoxGeometry(1.5, 3.0, 1.8), new THREE.MeshBasicMaterial({ visible: false }));
+            hitBox.position.y = 1.0; hitBox.userData = g.userData; 
+            hitBox.userData.root = g;
+            g.add(hitBox);
             return g;
         }
 
@@ -427,17 +437,18 @@
             head.position.y = 1.5;
             
             // Creeper Legs (4)
+            const legs = [];
             const legSize = 0.25;
             for(let x = -0.15; x <= 0.15; x += 0.3) {
                 for(let z = -0.15; z <= 0.15; z += 0.3) {
                     const l = new THREE.Mesh(new THREE.BoxGeometry(legSize, 0.3, legSize), darkMat);
                     l.position.set(x, 0.15, z);
-                    g.add(l);
+                    g.add(l); legs.push(l);
                 }
             }
             
             g.add(body, head);
-            g.userData = { type: 'enemy' };
+            g.userData = { type: 'enemy', legs, body, head };
             // Ensure child meshes also have the userData for raycasting/collision if needed
             body.userData = { type: 'enemy' };
             head.userData = { type: 'enemy' };
@@ -652,7 +663,7 @@
             const ferryman = createFerryman();
             ferryman.position.set(fx, 0, fz);
             ferryman.rotation.y = -ferrymanAngle + Math.PI;
-            ferryman.userData = { type: 'math', difficulty: 2, isFerryman: true };
+            Object.assign(ferryman.userData, { type: 'math', difficulty: 2, isFerryman: true });
             scene.add(ferryman); interactables.push(ferryman); entities.push(ferryman);
 
             // Trees
@@ -684,7 +695,7 @@
                     const diff = distToSpawn < 8 ? 1 : (distToSpawn < 15 ? 2 : 3);
                     const npc = Math.random() > 0.4 ? createHumanNPC(diff) : createFoxNPC(diff);
                     npc.position.set(p.x * CELL, 0, p.y * CELL);
-                    npc.userData = { type: 'math', difficulty: diff };
+                    Object.assign(npc.userData, { type: 'math', difficulty: diff });
                     scene.add(npc); interactables.push(npc); entities.push(npc);
                 }
             });
@@ -718,8 +729,8 @@
             const exit = new THREE.Mesh(new THREE.TorusKnotGeometry(0.4, 0.12), new THREE.MeshStandardMaterial({ color: 0xffd700 }));
             exit.position.set(trophy.x * CELL, 1.5, trophy.y * CELL);
             exit.userData = { type: 'exit', color: 0xffd700 };
-            const shield = new THREE.Mesh(new THREE.BoxGeometry(1.5, 6, 1.5), new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true, transparent: true, opacity: 0.2 }));
-            exit.add(shield);
+            const hitBox = new THREE.Mesh(new THREE.BoxGeometry(1.5, 3, 1.5), new THREE.MeshBasicMaterial({ visible: false }));
+            hitBox.userData = exit.userData; hitBox.userData.root = exit; exit.add(hitBox);
             scene.add(exit); interactables.push(exit); entities.push(exit);
 
             camera.position.set(CELL, 2, CELL);
@@ -746,8 +757,11 @@
             group.add(stem, ring, bit);
             group.position.set(gx * CELL, 1.5, gy * CELL);
             group.userData = { type: 'shop', id, price: KEY_PRICE, color: col };
-            const shield = new THREE.Mesh(new THREE.BoxGeometry(1.5, 7, 1.5), new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true, transparent: true, opacity: 0.2 }));
-            group.add(shield); scene.add(group); interactables.push(group); entities.push(group);
+            
+            const hitBox = new THREE.Mesh(new THREE.BoxGeometry(1.5, 3.0, 1.5), new THREE.MeshBasicMaterial({ visible: false }));
+            hitBox.userData = group.userData; hitBox.userData.root = group;
+            group.add(hitBox);
+            scene.add(group); interactables.push(group); entities.push(group);
         }
 
         function spawnBombShop(gx, gy) {
@@ -758,8 +772,11 @@
             group.add(bomb, wick);
             group.position.set(gx * CELL, 1, gy * CELL);
             group.userData = { type: 'shop', id: 'Bomb', price: BOMB_PRICE, color: 0x333333 };
-            const shield = new THREE.Mesh(new THREE.BoxGeometry(1.5, 7, 1.5), new THREE.MeshBasicMaterial({ color: 0x00ffff, wireframe: true, transparent: true, opacity: 0.2 }));
-            group.add(shield); scene.add(group); interactables.push(group); entities.push(group);
+            
+            const hitBox = new THREE.Mesh(new THREE.BoxGeometry(1.5, 3.0, 1.5), new THREE.MeshBasicMaterial({ visible: false }));
+            hitBox.userData = group.userData; hitBox.userData.root = group;
+            group.add(hitBox);
+            scene.add(group); interactables.push(group); entities.push(group);
         }
 
         function spawnDoor(gx, gy, id, col) {
@@ -801,10 +818,14 @@
             const ray = new THREE.Raycaster();
             ray.setFromCamera(new THREE.Vector2(0, 0), camera);
             const hits = ray.intersectObjects(interactables, true);
-            if (hits.length > 0 && hits[0].distance < 2.5) {
+            if (hits.length > 0 && hits[0].distance < 4.5) {
                 let obj = hits[0].object;
-                while (obj.parent && !obj.userData.type) obj = obj.parent;
-                if (obj.userData.type) processLogic(obj);
+                let interactTarget = null;
+                while (obj) {
+                    if (obj.userData && obj.userData.type) { interactTarget = obj; break; }
+                    obj = obj.parent;
+                }
+                if (interactTarget) processLogic(interactTarget);
             }
             setTimeout(() => { handGroup.visible = false; handGroup.position.z = -1.2; fingers.forEach(f => f.rotation.x = 0); }, 300);
         }
@@ -871,7 +892,8 @@
                                 boatState = 'drifting';
                                 showMsg("FERRYMAN SUMMONS THE BOAT!");
                             } else {
-                                scene.remove(obj); interactables = interactables.filter(i => i !== obj);
+                                const root = obj.userData.root || obj;
+                                scene.remove(root); interactables = interactables.filter(i => i !== root);
                             }
                         } else { 
                             sfx.fail(); 
@@ -886,8 +908,9 @@
                 if (gold >= d.price) {
                     gold -= d.price; sfx.buy();
                     if (d.id === 'Bomb') bombs++; else inventory.push(d.id);
-                    if (d.id !== 'Bomb') { scene.remove(obj); interactables = interactables.filter(i => i !== obj); }
-                    showMsg("PURCHASED " + d.id); updateHUD();
+                    const root = obj.userData.root || obj;
+                    scene.remove(root); interactables = interactables.filter(i => i !== root);
+                    showMsg("PURCHASED " + d.id.toUpperCase()); updateHUD();
                 } else showMsg("NEED " + (d.price - gold) + " MORE GOLD!");
             } else if (d.type === 'door') {
                 if (inventory.includes(d.id)) {
@@ -913,7 +936,7 @@
                 startLevel();
                 animate();
             } else {
-                gold = 0; lives = 3; bombs = 1; currentLevel = 1; inventory = [];
+                gold = 0; lives = 3; bombs = 0; currentLevel = 1; inventory = [];
                 updateHUD(); startLevel();
             }
         };
@@ -1103,7 +1126,29 @@
                 }
             }
 
-            entities.forEach(i => { if (i.userData.type === 'exit') i.rotation.y += 0.05; });
+            entities.forEach(i => { 
+                if (i.userData.type === 'exit') i.rotation.y += 0.05;
+                
+                // --- IDLE ANIMATIONS ---
+                const time = Date.now() * 0.003;
+                if (i.userData.head && i.userData.lArm) { // Humanoids
+                    i.userData.head.rotation.x = Math.sin(time) * 0.1;
+                    i.userData.lArm.rotation.x = Math.sin(time) * 0.5;
+                    i.userData.rArm.rotation.x = -Math.sin(time) * 0.5;
+                }
+                if (i.userData.tail) { // Fox
+                    i.userData.tail.rotation.y = Math.sin(time * 2) * 0.5;
+                    i.userData.head.rotation.y = Math.sin(time * 0.5) * 0.2;
+                }
+                if (i.userData.legs) { // Creeper Slime
+                    i.userData.legs.forEach((l, idx) => {
+                        l.rotation.x = Math.sin(time * 3 + idx) * 0.6;
+                    });
+                }
+                if (i.userData.type === 'enemy' && !i.userData.legs) { // Ghost
+                    i.position.y = 1.6 + Math.sin(time) * 0.3;
+                }
+            });
             renderer.render(scene, camera);
         }
     </script>
