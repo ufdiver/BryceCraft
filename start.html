@@ -208,6 +208,42 @@
             padding-top: 17px;
             padding-bottom: 13px;
         }
+
+        #how-to-screen {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 3000;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .controls-list {
+            text-align: left;
+            background: #444;
+            padding: 20px;
+            border: 4px solid #fff;
+            border-bottom-color: #000;
+            border-right-color: #000;
+            box-shadow: 10px 10px 0 #222;
+            margin-bottom: 30px;
+            min-width: 400px;
+        }
+
+        .control-item {
+            margin: 10px 0;
+            font-size: 20px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .key-text {
+            color: #ffff00;
+            font-weight: bold;
+        }
     </style>
 </head>
 
@@ -219,8 +255,35 @@
             <div id="splash">3D MATH QUEST!</div>
         </div>
         <button class="mc-btn" onclick="startGame()">START GAME</button>
-        <button class="mc-btn" onclick="alert('Controls: WASD to Move, Space to Grab, B for Bomb!')">HOW TO PLAY</button>
+        <button class="mc-btn" onclick="showHowTo()">HOW TO PLAY</button>
         <p style="margin-top:20px; color:#aaa; font-style:italic">v1.2 - Voxel Engine Alpha</p>
+    </div>
+
+    <div id="how-to-screen">
+        <h2 style="font-size: 50px; color: #ffff00; text-shadow: 4px 4px #000; margin-bottom: 30px;">HOW TO PLAY</h2>
+        <div class="controls-list">
+            <div class="control-item"><span>MOVE:</span> <span class="key-text">WASD / ARROW KEYS</span></div>
+            <div class="control-item"><span>LOOK:</span> <span class="key-text">MOUSE MOVEMENT</span></div>
+            <div class="control-item"><span>INTERACT/GRAB:</span> <span class="key-text">SPACE BAR</span></div>
+            <div class="control-item"><span>USE BOMB:</span> <span class="key-text">B KEY</span></div>
+            <div class="control-item"><span>SHOOT (PISTOL):</span> <span class="key-text">F KEY</span></div>
+            <div class="control-item"><span>TOGGLE MAP:</span> <span class="key-text">M KEY</span></div>
+            <div style="margin-top:20px; color:#ccc; font-size:16px; border-top:1px solid #666; padding-top:10px;">
+                Tip: Walk up to NPCs and animals to talk to them! <span onclick="showAdmin()" style="cursor:default" title="Secret Tester Access">Math</span> problems give Gold. Don't touch the enemies!
+            </div>
+        </div>
+        <button class="mc-btn" onclick="hideHowTo()">BACK TO MENU</button>
+    </div>
+
+    <div id="admin-screen" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:4000; flex-direction:column; justify-content:center; align-items:center;">
+        <h2 style="color:#ff0000; font-size:40px; margin-bottom:20px;">ADMIN TESTER PANEL</h2>
+        <div class="controls-list" style="min-width:300px; text-align:center;">
+            <p style="color:#fff;">SELECT START LEVEL:</p>
+            <input type="number" id="admin-lvl-input" value="1" min="1" max="99" style="font-size:30px; width:80px; text-align:center; margin-bottom:20px;">
+            <p style="color:#aaa; font-size:14px;">Admin Perks: 1000 Gold &bull; 3 Bombs &bull; Pistol (5 shots)</p>
+        </div>
+        <button class="mc-btn" style="background:#800; border-color:#f00;" onclick="startAdminGame()">START ADMIN TEST</button>
+        <button class="mc-btn" style="width:200px; font-size:16px; margin-top:10px;" onclick="hideAdmin()">CANCEL</button>
     </div>
 
     <div id="hud">
@@ -230,6 +293,7 @@
         <div class="stat-row" style="color:#ffaa00"><span>BOMBS:</span> <span id="bomb-val">0</span></div>
         <div style="font-size: 13px; margin-top:8px; border-top: 1px solid #444; padding-top:5px;">INV: <span
                 id="keys-val">Empty</span></div>
+        <div id="gun-hud" style="color:#00ffff; font-size: 13px; margin-top:3px; display:none;">Pistol: <span id="ammo-val">0</span> shots <span style="color:#fff; opacity:0.7;">(f)</span></div>
     </div>
 
     <div id="map-container">
@@ -261,11 +325,12 @@
         import * as THREE from 'three';
 
         // --- CORE STATE ---
-        let gold = 0, lives = 3, bombs = 0, currentLevel = 1, inventory = [], isMathActive = false, lastHit = 0, isDead = false, startRotation = 0, boatMesh = null, boatAngle = 0;
+        let gold = 0, lives = 3, bombs = 0, ammo = 0, hasGun = false, currentLevel = 1, inventory = [], isMathActive = false, lastHit = 0, isDead = false, startRotation = 0, boatMesh = null, boatAngle = 0;
         let boatState = 'patrol', ferrymanAngle = 0, boatRadius = 0, isPlayerOnBoat = false, atShore = null, lastDisembark = 0; 
         let isGameStarted = false;
-        const GRID_SIZE = 17, CELL = 4, KEY_PRICE = 150, BOMB_PRICE = 75;
+        const GRID_SIZE = 17, CELL = 4, KEY_PRICE = 150, BOMB_PRICE = 75, GUN_PRICE = 200;
         let mazeData = [], explored = [], discoveredItems = [], collidables = [], interactables = [], entities = [], fingers = [], enemies = [], waterBounds = null;
+        let bullets = [];
 
         // --- AUDIO ENGINE ---
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -283,6 +348,14 @@
             buy: () => { playTone(600, 'sine', 0.1); setTimeout(() => playTone(900, 'sine', 0.2), 100); },
             win: () => { playTone(800, 'sine', 0.1); setTimeout(() => playTone(1200, 'sine', 0.3), 100); },
             fail: () => { playTone(200, 'square', 0.3, 0.15); },
+            shoot: () => {
+                // Deep bang
+                playTone(90,  'sawtooth', 0.18, 0.55);
+                playTone(55,  'sine',     0.22, 0.4);
+                // High crack / snap
+                playTone(900, 'square',   0.04, 0.25);
+                playTone(400, 'sawtooth', 0.06, 0.15);
+            },
             levelUp: () => { 
                 [440, 554, 659, 880].forEach((f, i) => setTimeout(() => playTone(f, 'sine', 0.2), i * 150));
             }
@@ -551,6 +624,22 @@
             return cells;
         }
 
+        function updateHUD() {
+            document.getElementById('lvl-val').innerText = currentLevel;
+            document.getElementById('gold-val').innerText = gold;
+            document.getElementById('lives-val').innerText = lives;
+            document.getElementById('bomb-val').innerText = bombs;
+            document.getElementById('keys-val').innerText = inventory.length ? inventory.join(", ") : "Empty";
+            
+            const gunHUD = document.getElementById('gun-hud');
+            if (hasGun) {
+                gunHUD.style.display = 'block';
+                document.getElementById('ammo-val').innerText = ammo;
+            } else {
+                gunHUD.style.display = 'none';
+            }
+        }
+
         function startLevel() {
             isDead = false;
             document.getElementById('death-overlay').style.opacity = 0;
@@ -612,6 +701,15 @@
             if (zone2.length > 0) {
                 const bk = getUnoccupied(zone2);
                 if (bk) { spawnKeyShop(bk.x, bk.y, "Blue Key", 0x0000ff); occupied.add(`${bk.x},${bk.y}`); }
+
+                // LEVEL 2+ EXCLUSIVE: PISTOL SHOP
+                if (currentLevel >= 2) {
+                    const gunCell = getUnoccupied(zone2);
+                    if (gunCell) {
+                        spawnGunShop(gunCell.x, gunCell.y);
+                        occupied.add(`${gunCell.x},${gunCell.y}`);
+                    }
+                }
             }
 
             // Visual World
@@ -796,6 +894,21 @@
             scene.add(group); interactables.push(group); entities.push(group);
         }
 
+        function spawnGunShop(gx, gy) {
+            const group = new THREE.Group();
+            const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.3, 0.15), new THREE.MeshStandardMaterial({ color: 0x333333 }));
+            const handle = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.4, 0.15), new THREE.MeshStandardMaterial({ color: 0x222222 }));
+            handle.position.set(-0.15, -0.2, 0); handle.rotation.z = -0.2;
+            group.add(body, handle);
+            group.position.set(gx * CELL, 1.2, gy * CELL);
+            group.userData = { type: 'shop', id: 'Pistol', price: GUN_PRICE, color: 0x555555 };
+            
+            const hitBox = new THREE.Mesh(new THREE.BoxGeometry(1.5, 3.0, 1.5), new THREE.MeshBasicMaterial({ visible: false }));
+            hitBox.userData = group.userData; hitBox.userData.root = group;
+            group.add(hitBox);
+            scene.add(group); interactables.push(group); entities.push(group);
+        }
+
         function spawnDoor(gx, gy, id, col) {
             // Check cross-neighbors to see where the walls are to bridge them
             const hasLeftWall = mazeData[gy][gx-1] === 1;
@@ -826,12 +939,75 @@
         // --- INTERACTION ---
         const keysDown = {};
         window.addEventListener('keydown', e => {
-            if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space", "KeyB"].includes(e.code)) e.preventDefault();
+            if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space", "KeyB", "KeyF"].includes(e.code)) e.preventDefault();
             keysDown[e.code] = true;
             if (e.code === 'Space' && !isMathActive) handleGrab();
             if (e.code === 'KeyB' && !isMathActive) handleBomb();
+            if (e.code === 'KeyF' && !isMathActive) handleShoot();
         });
         window.addEventListener('keyup', e => keysDown[e.code] = false);
+
+        function handleShoot() {
+            if (!hasGun || ammo <= 0) {
+                if (hasGun && ammo <= 0) showMsg("OUT OF AMMO!");
+                return;
+            }
+            ammo--; sfx.shoot(); updateHUD();
+
+            // --- MUZZLE FLASH ---
+            const flash = new THREE.PointLight(0xff8800, 6, 8);
+            flash.position.copy(camera.position);
+            scene.add(flash);
+            setTimeout(() => scene.remove(flash), 80);
+
+            // --- SPAWN BULLET PROJECTILE ---
+            const dir = new THREE.Vector3();
+            camera.getWorldDirection(dir);
+
+            const bulletMat = new THREE.MeshBasicMaterial({ color: 0xffee44 });
+            const bullet = new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 6), bulletMat);
+            bullet.position.copy(camera.position).addScaledVector(dir, 1.8);
+            bullet.userData = { dir: dir.clone(), speed: 2.0, life: 0, maxLife: 180 };
+            scene.add(bullet);
+            bullets.push(bullet);
+
+            // Bullet trail glow (short-lived line)
+            const trailGeo = new THREE.CylinderGeometry(0.025, 0.025, 1.2, 5);
+            const trailMat = new THREE.MeshBasicMaterial({ color: 0xffcc44, transparent: true, opacity: 0.6 });
+            const trail = new THREE.Mesh(trailGeo, trailMat);
+            trail.position.copy(bullet.position).addScaledVector(dir, -0.6);
+            trail.quaternion.copy(camera.quaternion);
+            trail.rotateX(Math.PI / 2);
+            scene.add(trail);
+            setTimeout(() => scene.remove(trail), 80);
+        }
+
+        function spawnBulletHole(pos, wall) {
+            const holeMat = new THREE.MeshBasicMaterial({ color: 0x111111, side: THREE.DoubleSide });
+            const hole = new THREE.Mesh(new THREE.CircleGeometry(0.14, 8), holeMat);
+            const wPos = wall.position;
+            const dx = pos.x - wPos.x, dz = pos.z - wPos.z;
+            // Clamp Y so the hole stays on the visible wall face
+            const hy = Math.max(0.2, Math.min(CELL - 0.2, pos.y));
+            if (Math.abs(dx) >= Math.abs(dz)) {
+                // East / West face
+                hole.position.set(wPos.x + Math.sign(dx) * (CELL / 2 + 0.03), hy, pos.z);
+                hole.rotation.y = Math.PI / 2;
+            } else {
+                // North / South face
+                hole.position.set(pos.x, hy, wPos.z + Math.sign(dz) * (CELL / 2 + 0.03));
+            }
+            // Dark scorch ring
+            const scorchMat = new THREE.MeshBasicMaterial({ color: 0x2a1a0a, transparent: true, opacity: 0.55, side: THREE.DoubleSide });
+            const scorch = new THREE.Mesh(new THREE.CircleGeometry(0.28, 8), scorchMat);
+            scorch.position.copy(hole.position);
+            scorch.rotation.copy(hole.rotation);
+            scorch.position.addScaledVector(scorch.getWorldDirection(new THREE.Vector3()), -0.01);
+            scene.add(scorch);
+            scene.add(hole);
+            entities.push(hole);
+            entities.push(scorch);
+        }
 
         function handleGrab() {
             // DISEMBARK LOGIC (Fixed for SPACE and Refined Distance)
@@ -942,7 +1118,9 @@
             } else if (d.type === 'shop') {
                 if (gold >= d.price) {
                     gold -= d.price; sfx.buy();
-                    if (d.id === 'Bomb') bombs++; else inventory.push(d.id);
+                    if (d.id === 'Bomb') bombs++; 
+                    else if (d.id === 'Pistol') { hasGun = true; ammo += 5; }
+                    else inventory.push(d.id);
                     const root = obj.userData.root || obj;
                     scene.remove(root); interactables = interactables.filter(i => i !== root);
                     showMsg("PURCHASED " + d.id.toUpperCase()); updateHUD();
@@ -964,16 +1142,36 @@
             if (m.style.display === 'block') drawMap();
         };
 
+        window.showHowTo = () => { document.getElementById('how-to-screen').style.display = 'flex'; };
+        window.hideHowTo = () => { document.getElementById('how-to-screen').style.display = 'none'; };
+        window.showAdmin = () => { document.getElementById('admin-screen').style.display = 'flex'; };
+        window.hideAdmin = () => { document.getElementById('admin-screen').style.display = 'none'; };
+
+        window.startAdminGame = () => {
+            const lvl = parseInt(document.getElementById('admin-lvl-input').value) || 1;
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            gold = 1000; lives = 3; bombs = 3; currentLevel = lvl; inventory = [];
+            hasGun = true; ammo = 5;
+            document.getElementById('landing-page').style.display = 'none';
+            document.getElementById('how-to-screen').style.display = 'none';
+            document.getElementById('admin-screen').style.display = 'none';
+            if (!isGameStarted) {
+                isGameStarted = true;
+                updateHUD(); startLevel(); animate();
+            } else {
+                updateHUD(); startLevel();
+            }
+        };
+
         window.startGame = () => {
-            console.log("Game Starting...");
             if (audioCtx.state === 'suspended') audioCtx.resume();
             document.getElementById('landing-page').style.display = 'none';
             if (!isGameStarted) {
                 isGameStarted = true;
-                startLevel();
-                animate();
+                updateHUD(); startLevel(); animate();
             } else {
                 gold = 0; lives = 3; bombs = 0; currentLevel = 1; inventory = [];
+                hasGun = false; ammo = 0;
                 updateHUD(); startLevel();
             }
         };
@@ -1027,13 +1225,7 @@
             ctx.beginPath(); ctx.moveTo(0, -s); ctx.lineTo(-s / 1.5, s / 1.5); ctx.lineTo(s / 1.5, s / 1.5); ctx.fill(); ctx.restore();
         }
 
-        function updateHUD() {
-            document.getElementById('gold-val').innerText = gold;
-            document.getElementById('lives-val').innerText = lives;
-            document.getElementById('bomb-val').innerText = bombs;
-            document.getElementById('lvl-val').innerText = currentLevel;
-            document.getElementById('keys-val').innerText = inventory.length ? inventory.join(", ") : "None";
-        }
+        // (updateHUD defined above at initialization — duplicate removed)
 
         function showMsg(t) {
             const m = document.getElementById('msg'); m.innerText = t;
@@ -1186,6 +1378,48 @@
                     i.position.y = 1.6 + Math.sin(time) * 0.3;
                 }
             });
+
+            // --- BULLET UPDATE LOOP ---
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                const b = bullets[i];
+                const d = b.userData;
+                d.life++;
+                b.position.addScaledVector(d.dir, d.speed);
+
+                let remove = d.life > d.maxLife;
+
+                if (!remove) {
+                    // Wall / collidable collision
+                    for (const w of collidables) {
+                        const wBox = new THREE.Box3().setFromObject(w);
+                        if (wBox.containsPoint(b.position)) {
+                            if (w.userData.type === 'destructible') spawnBulletHole(b.position.clone(), w);
+                            remove = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (!remove) {
+                    // Enemy collision
+                    for (let j = enemies.length - 1; j >= 0; j--) {
+                        const en = enemies[j];
+                        const eCenter = new THREE.Vector3(en.position.x, en.position.y + 1.2, en.position.z);
+                        const eBox = new THREE.Box3().setFromCenterAndSize(eCenter, new THREE.Vector3(1.6, 2.6, 1.6));
+                        if (eBox.containsPoint(b.position)) {
+                            scene.remove(en);
+                            enemies.splice(j, 1);
+                            entities = entities.filter(e => e !== en);
+                            showMsg("TARGET ELIMINATED!");
+                            remove = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (remove) { scene.remove(b); bullets.splice(i, 1); }
+            }
+
             renderer.render(scene, camera);
         }
     </script>
