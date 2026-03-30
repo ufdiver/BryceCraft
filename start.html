@@ -517,15 +517,20 @@
         }
 
         // --- MAZE ENGINE ---
+        let corridorCells = [];
         function generateMaze() {
             let maze = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(1));
+            corridorCells = [];
             function carve(x, y) {
                 maze[y][x] = 0;
                 let dirs = [[0, -2], [0, 2], [-2, 0], [2, 0]].sort(() => Math.random() - 0.5);
                 for (let [dx, dy] of dirs) {
                     let nx = x + dx, ny = y + dy;
                     if (nx > 0 && nx < GRID_SIZE - 1 && ny > 0 && ny < GRID_SIZE - 1 && maze[ny][nx] === 1) {
-                        maze[y + dy / 2][x + dx / 2] = 0; carve(nx, ny);
+                        const mx = x + dx / 2, my = y + dy / 2;
+                        maze[my][mx] = 0; 
+                        corridorCells.push({x: mx, y: my});
+                        carve(nx, ny);
                     }
                 }
             }
@@ -576,8 +581,10 @@
                 });
             }
 
-            const rDoor = mainPath[Math.floor(mainPath.length * 0.35)];
-            const bDoor = mainPath[Math.floor(mainPath.length * 0.75)];
+            // For doors, we pick actual corridor connectors rather than random path nodes
+            // This ensures they are restricted to narrow 1-block wide spaces
+            const rDoor = corridorCells[Math.floor(corridorCells.length * 0.35)];
+            const bDoor = corridorCells[Math.floor(corridorCells.length * 0.75)];
             const trophy = mainPath[mainPath.length - 1];
             occupied.add(`${rDoor.x},${rDoor.y}`);
             occupied.add(`${bDoor.x},${bDoor.y}`);
@@ -665,6 +672,16 @@
             ferryman.rotation.y = -ferrymanAngle + Math.PI;
             Object.assign(ferryman.userData, { type: 'math', difficulty: 2, isFerryman: true });
             scene.add(ferryman); interactables.push(ferryman); entities.push(ferryman);
+
+            // Master Mentor on Outer Shore (Beyond the Moat)
+            const mentorAngle = ferrymanAngle + Math.PI; // Opposite side
+            const mx = mazeCenter + Math.cos(mentorAngle) * (moatOut + 5);
+            const mz = mazeCenter + Math.sin(mentorAngle) * (moatOut + 5);
+            const mentor = createHumanNPC(3); // Red shirt to stand out
+            mentor.position.set(mx, 0, mz);
+            mentor.rotation.y = -mentorAngle + Math.PI;
+            Object.assign(mentor.userData, { type: 'talk', msg: "Congratulations, Bryce! You figured out today's challenge." });
+            scene.add(mentor); interactables.push(mentor); entities.push(mentor);
 
             // Trees
             for (let i = 0; i < 120; i++) {
@@ -780,10 +797,28 @@
         }
 
         function spawnDoor(gx, gy, id, col) {
-            const isH = mazeData[gy][gx - 1] === 1 || mazeData[gy][gx + 1] === 1;
-            const d = new THREE.Mesh(new THREE.BoxGeometry(CELL * 1.15, CELL, 0.5), new THREE.MeshStandardMaterial({ color: col, transparent: true, opacity: 0.6 }));
+            // Check cross-neighbors to see where the walls are to bridge them
+            const hasLeftWall = mazeData[gy][gx-1] === 1;
+            const hasRightWall = mazeData[gy][gx+1] === 1;
+            const hasTopWall = mazeData[gy-1][gx] === 1;
+            const hasBotWall = mazeData[gy+1][gx] === 1;
+
+            const d = new THREE.Mesh(new THREE.BoxGeometry(CELL * 1.5, CELL, 0.4), new THREE.MeshStandardMaterial({ color: col, transparent: true, opacity: 0.6 }));
             d.position.set(gx * CELL, CELL / 2, gy * CELL);
-            if (!isH) d.rotation.y = Math.PI / 2;
+
+            // If we have walls to the left & right, the corridor is horizontal/west-east
+            // We need to rotate the door to span across (north-south) to BLOCK it
+            if (hasLeftWall && hasRightWall) {
+                // No rotation needed for N/S span
+            } else if (hasTopWall && hasBotWall) {
+                // Walls are Top/Bottom, corridor is North/South. Rotate door to span East/West.
+                d.rotation.y = Math.PI / 2;
+            } else {
+                // Fallback for tricky spots: choose based on best fit
+                if (hasLeftWall || hasRightWall) { /* keep default */ }
+                else d.rotation.y = Math.PI / 2;
+            }
+            
             d.userData = { type: 'door', id, color: col };
             scene.add(d); interactables.push(d); collidables.push(d);
         }
@@ -912,6 +947,8 @@
                     scene.remove(root); interactables = interactables.filter(i => i !== root);
                     showMsg("PURCHASED " + d.id.toUpperCase()); updateHUD();
                 } else showMsg("NEED " + (d.price - gold) + " MORE GOLD!");
+            } else if (d.type === 'talk') {
+                showMsg(d.msg);
             } else if (d.type === 'door') {
                 if (inventory.includes(d.id)) {
                     scene.remove(obj); collidables = collidables.filter(w => w !== obj);
