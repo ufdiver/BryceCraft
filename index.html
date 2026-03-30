@@ -267,6 +267,8 @@
             <div class="control-item"><span>INTERACT/GRAB:</span> <span class="key-text">SPACE BAR</span></div>
             <div class="control-item"><span>USE BOMB:</span> <span class="key-text">B KEY</span></div>
             <div class="control-item"><span>SHOOT (PISTOL):</span> <span class="key-text">F KEY</span></div>
+            <div class="control-item"><span>CROUCH / STAND:</span> <span class="key-text">C KEY (hold)</span></div>
+            <div class="control-item"><span>JUMP:</span> <span class="key-text">X KEY</span></div>
             <div class="control-item"><span>TOGGLE MAP:</span> <span class="key-text">M KEY</span></div>
             <div style="margin-top:20px; color:#ccc; font-size:16px; border-top:1px solid #666; padding-top:10px;">
                 Tip: Walk up to NPCs and animals to talk to them! <span onclick="showAdmin()" style="cursor:default" title="Secret Tester Access">Math</span> problems give Gold. Don't touch the enemies!
@@ -294,6 +296,7 @@
         <div style="font-size: 13px; margin-top:8px; border-top: 1px solid #444; padding-top:5px;">INV: <span
                 id="keys-val">Empty</span></div>
         <div id="gun-hud" style="color:#00ffff; font-size: 13px; margin-top:3px; display:none;">Pistol: <span id="ammo-val">0</span> shots <span style="color:#fff; opacity:0.7;">(f)</span></div>
+        <div id="crouch-hud" style="color:#aaffaa; font-size: 12px; margin-top:4px; display:none; letter-spacing:1px;">&#9660; CROUCHING</div>
     </div>
 
     <div id="map-container">
@@ -328,9 +331,13 @@
         let gold = 0, lives = 3, bombs = 0, ammo = 0, hasGun = false, currentLevel = 1, inventory = [], isMathActive = false, lastHit = 0, isDead = false, startRotation = 0, boatMesh = null, boatAngle = 0;
         let boatState = 'patrol', ferrymanAngle = 0, boatRadius = 0, isPlayerOnBoat = false, atShore = null, lastDisembark = 0; 
         let isGameStarted = false;
+        let isCrouching = false;
+        const STAND_HEIGHT = 2.0, CROUCH_HEIGHT = 0.85;
+        let jumpVelocity = 0;
+        const GRAVITY = 0.018, JUMP_FORCE = 0.30;
         const GRID_SIZE = 17, CELL = 4, KEY_PRICE = 150, BOMB_PRICE = 75, GUN_PRICE = 200;
         let mazeData = [], explored = [], discoveredItems = [], collidables = [], interactables = [], entities = [], fingers = [], enemies = [], waterBounds = null;
-        let bullets = [];
+        let bullets = [], lavaPatches = [];
 
         // --- AUDIO ENGINE ---
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -650,7 +657,7 @@
             entities.forEach(e => scene.remove(e));
             collidables.forEach(w => scene.remove(w));
             enemies.forEach(e => scene.remove(e));
-            interactables = []; entities = []; collidables = []; enemies = [];
+            interactables = []; entities = []; collidables = []; enemies = []; lavaPatches = [];
             inventory = []; discoveredItems = [];
             explored = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(false));
 
@@ -734,6 +741,33 @@
                         w.userData = { type: 'destructible' };
                         scene.add(w); collidables.push(w);
                     }
+                }
+            }
+
+            // --- LAVA PATCHES (level 2+) ---
+            if (currentLevel >= 2) {
+                const lavaCount = 6 + currentLevel * 2;
+                let placed = 0, attempts = 0;
+                while (placed < lavaCount && attempts < 500) {
+                    attempts++;
+                    const gx = Math.floor(Math.random() * (GRID_SIZE - 2)) + 1;
+                    const gy = Math.floor(Math.random() * (GRID_SIZE - 2)) + 1;
+                    if (mazeData[gy][gx] !== 0) continue;
+                    if (Math.abs(gx - 1) + Math.abs(gy - 1) < 4) continue;
+                    const wx = gx * CELL, wz = gy * CELL;
+                    const lavaMat = new THREE.MeshStandardMaterial({
+                        color: 0xff3300,
+                        emissive: new THREE.Color(0xff4400),
+                        emissiveIntensity: 1.2,
+                        roughness: 0.9
+                    });
+                    const lava = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.06, 1.5), lavaMat);
+                    lava.position.set(wx, 0.04, wz);
+                    lava.userData = { type: 'lava', cx: wx, cz: wz, radius: 0.75 };
+                    scene.add(lava);
+                    entities.push(lava);
+                    lavaPatches.push(lava);
+                    placed++;
                 }
             }
 
@@ -939,11 +973,14 @@
         // --- INTERACTION ---
         const keysDown = {};
         window.addEventListener('keydown', e => {
-            if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space", "KeyB", "KeyF"].includes(e.code)) e.preventDefault();
+            if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space", "KeyB", "KeyF", "KeyC", "KeyX"].includes(e.code)) e.preventDefault();
             keysDown[e.code] = true;
             if (e.code === 'Space' && !isMathActive) handleGrab();
             if (e.code === 'KeyB' && !isMathActive) handleBomb();
             if (e.code === 'KeyF' && !isMathActive) handleShoot();
+            if (e.code === 'KeyX' && !isMathActive && !isDead && jumpVelocity === 0 && !isCrouching) {
+                jumpVelocity = JUMP_FORCE;
+            }
         });
         window.addEventListener('keyup', e => keysDown[e.code] = false);
 
@@ -1241,9 +1278,27 @@
                 } else {
                     const old = camera.position.clone();
                     // Disable normal walking if on boat to prevent falling off
+                    // Hold C to crouch, release to stand (disabled mid-air)
+                    isCrouching = !!keysDown['KeyC'] && !isDead && jumpVelocity === 0;
+                    document.getElementById('crouch-hud').style.display = isCrouching ? 'block' : 'none';
+                    const baseY = isCrouching ? CROUCH_HEIGHT : STAND_HEIGHT;
+
+                    // Jump physics — override Y lerp while airborne
+                    if (jumpVelocity !== 0) {
+                        camera.position.y += jumpVelocity;
+                        jumpVelocity -= GRAVITY;
+                        if (camera.position.y <= baseY) {
+                            camera.position.y = baseY;
+                            jumpVelocity = 0;
+                        }
+                    } else {
+                        camera.position.y += (baseY - camera.position.y) * 0.15;
+                    }
+
                     if (!isPlayerOnBoat) {
-                        if (keysDown['ArrowUp'] || keysDown['KeyW']) camera.translateZ(-0.13);
-                        if (keysDown['ArrowDown'] || keysDown['KeyS']) camera.translateZ(0.13);
+                        const moveSpeed = isCrouching ? 0.07 : 0.13;
+                        if (keysDown['ArrowUp'] || keysDown['KeyW']) camera.translateZ(-moveSpeed);
+                        if (keysDown['ArrowDown'] || keysDown['KeyS']) camera.translateZ(moveSpeed);
                         if (keysDown['ArrowLeft'] || keysDown['KeyA']) camera.rotation.y += 0.045;
                         if (keysDown['ArrowRight'] || keysDown['KeyD']) camera.rotation.y -= 0.045;
                     }
@@ -1293,6 +1348,23 @@
                         if (dist > waterBounds.in && dist < waterBounds.out) {
                             lastHit = Date.now();
                             handleDeath("FELL IN THE MOAT! -1 LIFE");
+                        }
+                    }
+
+                    // --- LAVA DAMAGE CHECK ---
+                    if (lavaPatches.length > 0 && Date.now() - lastHit > 1200 && jumpVelocity === 0) {
+                        // Only hurt if player is on the ground (not jumping)
+                        const groundedY = isCrouching ? CROUCH_HEIGHT : STAND_HEIGHT;
+                        if (camera.position.y < groundedY + 0.35) {
+                            for (const lp of lavaPatches) {
+                                const ldx = camera.position.x - lp.userData.cx;
+                                const ldz = camera.position.z - lp.userData.cz;
+                                if (Math.sqrt(ldx*ldx + ldz*ldz) < lp.userData.radius) {
+                                    lastHit = Date.now();
+                                    handleDeath("BURNED BY LAVA! -1 LIFE");
+                                    break;
+                                }
+                            }
                         }
                     }
                 }
@@ -1356,6 +1428,14 @@
             }
 
             entities.forEach(i => { 
+                if (i.userData.type === 'lava') {
+                    // Pulsing orange-red glow
+                    const pulse = 0.8 + Math.sin(Date.now() * 0.004 + i.position.x) * 0.4;
+                    i.material.emissiveIntensity = pulse;
+                    i.material.color.setHSL(0.04 - pulse * 0.02, 1, 0.4 + pulse * 0.1);
+                    i.position.y = 0.03 + Math.sin(Date.now() * 0.003 + i.position.z) * 0.015;
+                    return;
+                }
                 if (i.userData.type === 'exit') i.rotation.y += 0.05;
                 
                 // --- IDLE ANIMATIONS ---
