@@ -372,7 +372,7 @@
         const GRAVITY = 0.018, JUMP_FORCE = 0.30;
         const GRID_SIZE = 17, CELL = 4, KEY_PRICE = 150, BOMB_PRICE = 75, GUN_PRICE = 200;
         let mazeData = [], explored = [], discoveredItems = [], collidables = [], interactables = [], entities = [], fingers = [], enemies = [], waterBounds = null;
-        let bullets = [], lavaPatches = [];
+        let bullets = [], lavaPatches = [], laserBeams = [];
 
         // --- AUDIO ENGINE ---
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -692,7 +692,7 @@
             entities.forEach(e => scene.remove(e));
             collidables.forEach(w => scene.remove(w));
             enemies.forEach(e => scene.remove(e));
-            interactables = []; entities = []; collidables = []; enemies = []; lavaPatches = [];
+            interactables = []; entities = []; collidables = []; enemies = []; lavaPatches = []; laserBeams = [];
             inventory = []; discoveredItems = [];
             explored = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(false));
 
@@ -820,6 +820,68 @@
                     scene.add(lava);
                     entities.push(lava);
                     lavaPatches.push(lava);
+                    placed++;
+                }
+            }
+
+            // --- LASER BEAMS (level 3+) ---
+            if (currentLevel >= 3) {
+                const laserCount = 4 + currentLevel * 2;
+                let placed = 0, attempts = 0;
+                while (placed < laserCount && attempts < 500) {
+                    attempts++;
+                    const gx = Math.floor(Math.random() * (GRID_SIZE - 2)) + 1;
+                    const gy = Math.floor(Math.random() * (GRID_SIZE - 2)) + 1;
+                    if (mazeData[gy][gx] !== 0) continue;
+                    if (Math.abs(gx - 1) + Math.abs(gy - 1) < 4) continue;
+                    
+                    // Don't place on top of lava
+                    if (lavaPatches.some(lp => lp.userData.cx === gx * CELL && lp.userData.cz === gy * CELL)) continue;
+
+                    const wL = mazeData[gy][gx - 1] === 1;
+                    const wR = mazeData[gy][gx + 1] === 1;
+                    const wU = mazeData[gy - 1][gx] === 1;
+                    const wD = mazeData[gy + 1][gx] === 1;
+
+                    let wSize = 0, hSize = 0, hx = 0, hz = 0;
+                    if (wL && wR && !wU && !wD) {
+                        wSize = CELL; hSize = 0.15;
+                        hx = (CELL / 2) - 0.15; hz = 0.3;
+                    } else if (wU && wD && !wL && !wR) {
+                        wSize = 0.15; hSize = CELL;
+                        hx = 0.3; hz = (CELL / 2) - 0.15;
+                    } else {
+                        continue;
+                    }
+
+                    const isHigh = Math.random() > 0.5;
+                    const wx = gx * CELL, wz = gy * CELL;
+
+                    if (isHigh) {
+                        // High laser fence (blocks jumps, but allows crouching under y=1.5)
+                        [1.5, 3.0, 4.5].forEach(yPos => {
+                            const mat = new THREE.MeshBasicMaterial({ color: 0xff00ff, transparent: true, opacity: 0.8 });
+                            const lb = new THREE.Mesh(new THREE.BoxGeometry(wSize, 0.1, hSize), mat);
+                            lb.position.set(wx, yPos, wz);
+                            lb.userData = { type: 'laser', cx: wx, cz: wz, cy: yPos, hx, hz };
+                            
+                            const glow = new THREE.Mesh(new THREE.BoxGeometry(wSize*1.1, 0.25, hSize*1.1), new THREE.MeshBasicMaterial({ color: 0xff00ff, transparent: true, opacity: 0.4 }));
+                            lb.add(glow);
+
+                            scene.add(lb); entities.push(lb); laserBeams.push(lb);
+                        });
+                    } else {
+                        // Low laser (must jump over, y=0.5)
+                        const mat = new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.8 });
+                        const lb = new THREE.Mesh(new THREE.BoxGeometry(wSize, 0.1, hSize), mat);
+                        lb.position.set(wx, 0.5, wz);
+                        lb.userData = { type: 'laser', cx: wx, cz: wz, cy: 0.5, hx, hz };
+                        
+                        const glow = new THREE.Mesh(new THREE.BoxGeometry(wSize*1.1, 0.25, hSize*1.1), new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.4 }));
+                        lb.add(glow);
+
+                        scene.add(lb); entities.push(lb); laserBeams.push(lb);
+                    }
                     placed++;
                 }
             }
@@ -1174,10 +1236,23 @@
                     b = Math.floor(Math.random() * 6);
                     ans = a * b;
                 } else {
-                    const range = diff * 8;
-                    a = Math.floor(Math.random() * range) + 2;
-                    b = Math.floor(Math.random() * range) + 2;
-                    ans = a * b;
+                    const rangeMax = diff === 1 ? 6 : (diff === 2 ? 9 : 12);
+                    const num1 = Math.floor(Math.random() * (rangeMax - 1)) + 2; // 2 to rangeMax
+                    const num2 = Math.floor(Math.random() * (rangeMax - 1)) + 2; // 2 to rangeMax
+                    
+                    if (currentLevel >= 4 && Math.random() > 0.5) {
+                        // Level 4+ Division: num1 * num2 = c -> c / num1 = num2
+                        a = num1 * num2;
+                        b = num1;
+                        ans = num2;
+                        op = '/';
+                    } else {
+                        // Level 3+ Multiplication
+                        a = num1;
+                        b = num2;
+                        ans = num1 * num2;
+                        op = 'x';
+                    }
                 }
 
                 const reward = (20 * currentLevel) + (diff * 15);
@@ -1440,6 +1515,24 @@
                                 if (Math.abs(ldx) < lp.userData.hx && Math.abs(ldz) < lp.userData.hz) {
                                     lastHit = Date.now();
                                     handleDeath("BURNED BY LAVA! -1 LIFE");
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    // --- LASER DAMAGE CHECK ---
+                    if (laserBeams.length > 0 && Date.now() - lastHit > 1200) {
+                        for (const lb of laserBeams) {
+                            const ldx = camera.position.x - lb.userData.cx;
+                            const ldz = camera.position.z - lb.userData.cz;
+                            if (Math.abs(ldx) < lb.userData.hx && Math.abs(ldz) < lb.userData.hz) {
+                                let bodyBottom = camera.position.y - (isCrouching ? CROUCH_HEIGHT : STAND_HEIGHT);
+                                let bodyTop = camera.position.y;
+                                // Collision if laser cy is within the player's Y bounds
+                                if (lb.userData.cy > bodyBottom - 0.2 && lb.userData.cy < bodyTop + 0.2) {
+                                    lastHit = Date.now();
+                                    handleDeath("ZAPPED BY LASER! -1 LIFE");
                                     break;
                                 }
                             }
