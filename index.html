@@ -90,6 +90,33 @@
             margin-top: 10px;
         }
 
+        #mentor-ui {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #222;
+            border: 6px solid #4aa52e;
+            padding: 20px;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            z-index: 150;
+            box-shadow: 10px 10px 0 rgba(0,0,0,0.8);
+        }
+
+        .mentor-btn {
+            width: 100%;
+            margin-bottom: 10px;
+            font-size: 16px;
+            padding: 10px;
+            background: #444;
+            color: #fff;
+            border: 2px solid #fff;
+            cursor: pointer;
+        }
+        .mentor-btn:hover { background: #666; }
+
         #msg {
             position: absolute;
             bottom: 120px;
@@ -313,6 +340,14 @@
     <div id="math-ui">
         <div id="math-problem" style="font-size:32px; font-weight:bold;"></div>
         <input type="number" id="math-input" placeholder="?">
+    </div>
+
+    <div id="mentor-ui">
+        <h3 style="color:#ffff00; margin-top:0; text-shadow:2px 2px #000;">CHOOSE YOUR REWARD</h3>
+        <button class="mentor-btn" onclick="mentorChoice(1)">1. Skip to next level</button>
+        <button class="mentor-btn" onclick="mentorChoice(2)">2. Get 2 free bombs</button>
+        <button class="mentor-btn" onclick="mentorChoice(3)">3. Receive 500 gold pieces</button>
+        <button class="mentor-btn" onclick="mentorChoice(0)" style="background:#800; border-color:#f00; margin-top:10px;">CANCEL</button>
     </div>
 
     <div id="msg"></div>
@@ -812,7 +847,7 @@
             const mentor = createHumanNPC(3); // Red shirt to stand out
             mentor.position.set(mx, 0, mz);
             mentor.rotation.y = -mentorAngle + Math.PI;
-            Object.assign(mentor.userData, { type: 'talk', msg: "Congratulations, Bryce! You figured out today's challenge." });
+            Object.assign(mentor.userData, { type: 'mentor_choice' });
             scene.add(mentor); interactables.push(mentor); entities.push(mentor);
 
             // Trees
@@ -1162,6 +1197,10 @@
                     scene.remove(root); interactables = interactables.filter(i => i !== root);
                     showMsg("PURCHASED " + d.id.toUpperCase()); updateHUD();
                 } else showMsg("NEED " + (d.price - gold) + " MORE GOLD!");
+            } else if (d.type === 'mentor_choice') {
+                isMathActive = true;
+                window.currentMentorObj = obj;
+                document.getElementById('mentor-ui').style.display = 'flex';
             } else if (d.type === 'talk') {
                 showMsg(d.msg);
             } else if (d.type === 'door') {
@@ -1181,6 +1220,27 @@
 
         window.showHowTo = () => { document.getElementById('how-to-screen').style.display = 'flex'; };
         window.hideHowTo = () => { document.getElementById('how-to-screen').style.display = 'none'; };
+
+        window.mentorChoice = (choice) => {
+            document.getElementById('mentor-ui').style.display = 'none';
+            isMathActive = false;
+            
+            if (choice === 1) {
+                sfx.levelUp();
+                currentLevel++; lives++; showMsg("SKIPPED TO LEVEL " + currentLevel);
+                setTimeout(startLevel, 1500);
+            } else if (choice === 2) {
+                bombs += 2; updateHUD(); showMsg("+2 BOMBS!"); sfx.win();
+            } else if (choice === 3) {
+                gold += 500; updateHUD(); showMsg("+500 GOLD!"); sfx.win();
+            }
+            
+            if (choice !== 0 && window.currentMentorObj) {
+                const root = window.currentMentorObj.userData.root || window.currentMentorObj;
+                scene.remove(root); interactables = interactables.filter(i => i !== root);
+                window.currentMentorObj = null;
+            }
+        };
         window.showAdmin = () => { document.getElementById('admin-screen').style.display = 'flex'; };
         window.hideAdmin = () => { document.getElementById('admin-screen').style.display = 'none'; };
 
