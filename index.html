@@ -789,6 +789,24 @@
                     const gy = Math.floor(Math.random() * (GRID_SIZE - 2)) + 1;
                     if (mazeData[gy][gx] !== 0) continue;
                     if (Math.abs(gx - 1) + Math.abs(gy - 1) < 4) continue;
+
+                    // Only place in corridors (walls on 2 opposite sides)
+                    const wL = mazeData[gy][gx - 1] === 1;
+                    const wR = mazeData[gy][gx + 1] === 1;
+                    const wU = mazeData[gy - 1][gx] === 1;
+                    const wD = mazeData[gy + 1][gx] === 1;
+
+                    let wSize = 0, hSize = 0;
+                    if (wL && wR && !wU && !wD) {
+                        // Corridor runs North-South, span East-West
+                        wSize = CELL; hSize = 1.6;
+                    } else if (wU && wD && !wL && !wR) {
+                        // Corridor runs East-West, span North-South
+                        wSize = 1.6; hSize = CELL;
+                    } else {
+                        continue; // Invalid, not a corridor
+                    }
+
                     const wx = gx * CELL, wz = gy * CELL;
                     const lavaMat = new THREE.MeshStandardMaterial({
                         color: 0xff3300,
@@ -796,9 +814,9 @@
                         emissiveIntensity: 1.2,
                         roughness: 0.9
                     });
-                    const lava = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.06, 1.5), lavaMat);
+                    const lava = new THREE.Mesh(new THREE.BoxGeometry(wSize, 0.06, hSize), lavaMat);
                     lava.position.set(wx, 0.04, wz);
-                    lava.userData = { type: 'lava', cx: wx, cz: wz, radius: 0.75 };
+                    lava.userData = { type: 'lava', cx: wx, cz: wz, hx: (wSize / 2) - 0.15, hz: (hSize / 2) - 0.15 };
                     scene.add(lava);
                     entities.push(lava);
                     lavaPatches.push(lava);
@@ -1419,7 +1437,7 @@
                             for (const lp of lavaPatches) {
                                 const ldx = camera.position.x - lp.userData.cx;
                                 const ldz = camera.position.z - lp.userData.cz;
-                                if (Math.sqrt(ldx*ldx + ldz*ldz) < lp.userData.radius) {
+                                if (Math.abs(ldx) < lp.userData.hx && Math.abs(ldz) < lp.userData.hz) {
                                     lastHit = Date.now();
                                     handleDeath("BURNED BY LAVA! -1 LIFE");
                                     break;
