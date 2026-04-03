@@ -119,7 +119,7 @@ export function startLevel() {
     state.collidables.forEach(w => state.scene.remove(w));
     state.enemies.forEach(e => state.scene.remove(e));
     state.interactables = []; state.entities = []; state.collidables = []; state.enemies = [];
-    state.lavaPatches = []; state.laserBeams = [];
+    state.lavaPatches = []; state.laserBeams = []; state.skyPortal = null; state.grenadeProjectiles = [];
     state.inventory = []; state.discoveredItems = [];
     state.explored = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(false));
 
@@ -425,6 +425,34 @@ export function startLevel() {
         state.camera.rotation.set(0, state.startRotation + Math.PI, 0);
     } else {
         state.camera.rotation.set(0, Math.PI, 0);
+    }
+
+    // --- SKY PORTAL (level 2+) — shortcut to next level ---
+    if (state.currentLevel >= 2) {
+        const portalAngle = Math.random() * Math.PI * 2;
+        // Place just outside the maze walls, well above wall height (walls = CELL = 4)
+        const portalDist = (GRID_SIZE * CELL) / 2 + 8;
+        const px = mazeCenter + Math.cos(portalAngle) * portalDist;
+        const pz = mazeCenter + Math.sin(portalAngle) * portalDist;
+
+        const portalGroup = new THREE.Group();
+
+        const ringMat = new THREE.MeshBasicMaterial({ color: 0xaa00ff, side: THREE.DoubleSide });
+        const ring = new THREE.Mesh(new THREE.TorusGeometry(1.5, 0.2, 16, 64), ringMat);
+
+        const innerMat = new THREE.MeshBasicMaterial({ color: 0x7b1fa2, transparent: true, opacity: 0.55, side: THREE.DoubleSide });
+        const inner = new THREE.Mesh(new THREE.CircleGeometry(1.5, 64), innerMat);
+
+        const glowMat = new THREE.MeshBasicMaterial({ color: 0xe040fb, transparent: true, opacity: 0.25 });
+        const glow = new THREE.Mesh(new THREE.TorusGeometry(1.9, 0.35, 16, 64), glowMat);
+
+        portalGroup.add(ring, inner, glow);
+        portalGroup.position.set(px, 16, pz); // y=16 — high above walls, unreachable by jumping
+        portalGroup.userData = { type: 'sky_portal' };
+
+        state.scene.add(portalGroup);
+        state.entities.push(portalGroup);
+        state.skyPortal = portalGroup;
     }
 
     updateHUD();

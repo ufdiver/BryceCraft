@@ -297,7 +297,9 @@
             <div class="control-item"><span>CROUCH / STAND:</span> <span class="key-text">C KEY (hold)</span></div>
             <div class="control-item"><span>JUMP:</span> <span class="key-text">X KEY</span></div>
             <div class="control-item"><span>TOGGLE MAP:</span> <span class="key-text">M KEY</span></div>
+            <div class="control-item"><span>THROW GRENADE:</span> <span class="key-text">T KEY</span></div>
             <div class="control-item"><span>PLACE BLOCK:</span> <span class="key-text">V KEY</span></div>
+            <div class="control-item"><span>CYCLE BLOCK TYPE:</span> <span class="key-text">G KEY</span></div>
             <div style="margin-top:20px; color:#ccc; font-size:16px; border-top:1px solid #666; padding-top:10px;">
                 Tip: Walk up to NPCs and animals to talk to them! <span onclick="showAdmin()" style="cursor:default" title="Secret Tester Access">Math</span> problems give Gold. Don't touch the enemies!
             </div>
@@ -324,6 +326,7 @@
         <div style="font-size: 13px; margin-top:8px; border-top: 1px solid #444; padding-top:5px;">INV: <span
                 id="keys-val">Empty</span></div>
         <div id="gun-hud" style="color:#00ffff; font-size: 13px; margin-top:3px; display:none;">Pistol: <span id="ammo-val">0</span> shots <span style="color:#fff; opacity:0.7;">(f)</span></div>
+        <div id="grenade-hud" style="color:#ff8800; font-size: 13px; margin-top:3px; display:none;">Grenades: <span id="grenade-val">0</span> <span style="color:#fff; opacity:0.7;">(t)</span></div>
         <div id="crouch-hud" style="color:#aaffaa; font-size: 12px; margin-top:4px; display:none; letter-spacing:1px;">&#9660; CROUCHING</div>
     </div>
 
@@ -345,7 +348,7 @@
 
     <div id="mentor-ui">
         <h3 style="color:#ffff00; margin-top:0; text-shadow:2px 2px #000;">CHOOSE YOUR REWARD</h3>
-        <button class="mentor-btn" onclick="mentorChoice(1)">1. Skip to next level</button>
+        <button class="mentor-btn" onclick="mentorChoice(1)">1. Receive 1 Grenade</button>
         <button class="mentor-btn" onclick="mentorChoice(2)">2. Get 2 free bombs</button>
         <button class="mentor-btn" onclick="mentorChoice(3)">3. Receive 500 gold pieces</button>
         <button class="mentor-btn" onclick="mentorChoice(0)" style="background:#800; border-color:#f00; margin-top:10px;">CANCEL</button>

@@ -6,13 +6,24 @@ import { startLevel } from './world.js';
 
 export const keysDown = {};
 
+const BLOCK_TYPES = [
+    { name: 'Dirt',  color: 0x8B5E3C },
+    { name: 'Rock',  color: 0x787878 },
+    { name: 'Wood',  color: 0x6B3A2A },
+    { name: 'Grass', color: 0x4CAF50 },
+    { name: 'Metal', color: 0x90A4AE },
+];
+let selectedBlockIdx = 0;
+
 window.addEventListener('keydown', e => {
-    if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space", "KeyB", "KeyF", "KeyC", "KeyX", "KeyV"].includes(e.code)) e.preventDefault();
+    if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space", "KeyB", "KeyF", "KeyC", "KeyX", "KeyV", "KeyG", "KeyT"].includes(e.code)) e.preventDefault();
     keysDown[e.code] = true;
     if (e.code === 'Space' && !state.isMathActive) handleGrab();
     if (e.code === 'KeyB' && !state.isMathActive) handleBomb();
     if (e.code === 'KeyF' && !state.isMathActive) handleShoot();
+    if (e.code === 'KeyT' && !state.isMathActive) handleGrenade();
     if (e.code === 'KeyV' && !state.isMathActive && !state.isDead) handlePlace();
+    if (e.code === 'KeyG' && !state.isMathActive && !state.isDead) handleCycleBlock();
     if (e.code === 'KeyX' && !state.isMathActive && !state.isDead && state.jumpVelocity === 0 && !state.isCrouching) {
         state.jumpVelocity = JUMP_FORCE;
     }
@@ -259,31 +270,74 @@ export function processLogic(obj) {
 }
 
 export function handlePlace() {
-    // Find the grid cell one step ahead of the player
+    const BLOCK = 1.0; // Minecraft-scale block size
+
     const dir = new THREE.Vector3();
     state.camera.getWorldDirection(dir);
     dir.y = 0;
     dir.normalize();
 
-    const targetX = state.camera.position.x + dir.x * CELL;
-    const targetZ = state.camera.position.z + dir.z * CELL;
-    const gx = Math.round(targetX / CELL);
-    const gy = Math.round(targetZ / CELL);
+    // Place ~3 units ahead, snapped to 1-unit grid
+    const reach = 3;
+    const bx = Math.round(state.camera.position.x + dir.x * reach);
+    const bz = Math.round(state.camera.position.z + dir.z * reach);
 
-    // Bounds check
-    if (gx < 0 || gx >= GRID_SIZE || gy < 0 || gy >= GRID_SIZE) return;
+    // Restrict to outside the maze boundary
+    const mazeMin = -CELL / 2;
+    const mazeMax = (GRID_SIZE - 1) * CELL + CELL / 2;
+    if (bx > mazeMin && bx < mazeMax && bz > mazeMin && bz < mazeMax) {
+        showMsg("CAN'T BUILD INSIDE THE MAZE!");
+        return;
+    }
 
-    // Don't place where a collidable already exists
-    const occupied = state.collidables.some(
-        w => Math.round(w.position.x / CELL) === gx && Math.round(w.position.z / CELL) === gy
-    );
-    if (occupied) { showMsg("CAN'T PLACE THERE!"); return; }
+    // Find the top of the highest existing placed block at this XZ column
+    let stackTop = 0;
+    for (const w of state.collidables) {
+        if (w.userData.type === 'placed' &&
+            Math.abs(w.position.x - bx) < 0.1 &&
+            Math.abs(w.position.z - bz) < 0.1) {
+            stackTop = Math.max(stackTop, w.position.y + BLOCK / 2);
+        }
+    }
+    const by = stackTop + BLOCK / 2;
 
-    const mat = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
-    const block = new THREE.Mesh(new THREE.BoxGeometry(CELL, CELL, CELL), mat);
-    block.position.set(gx * CELL, CELL / 2, gy * CELL);
+    const { color, name } = BLOCK_TYPES[selectedBlockIdx];
+    const mat = new THREE.MeshStandardMaterial({ color });
+    const block = new THREE.Mesh(new THREE.BoxGeometry(BLOCK, BLOCK, BLOCK), mat);
+    block.position.set(bx, by, bz);
     block.userData = { type: 'placed' };
     state.scene.add(block);
     state.collidables.push(block);
     state.entities.push(block);
+}
+
+export function handleCycleBlock() {
+    selectedBlockIdx = (selectedBlockIdx + 1) % BLOCK_TYPES.length;
+    const { name } = BLOCK_TYPES[selectedBlockIdx];
+    showMsg(`BLOCK: ${name} (${selectedBlockIdx + 1}/${BLOCK_TYPES.length})`);
+}
+
+export function handleGrenade() {
+    if (state.grenades <= 0) { showMsg("NO GRENADES!"); return; }
+    state.grenades--;
+    updateHUD();
+    sfx.shoot();
+
+    const dir = new THREE.Vector3();
+    state.camera.getWorldDirection(dir);
+
+    // Small dark green sphere
+    const grenadeMat = new THREE.MeshStandardMaterial({ color: 0x2d4a1e, roughness: 0.8 });
+    const grenade = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 8), grenadeMat);
+    grenade.position.copy(state.camera.position).addScaledVector(dir, 1.2);
+    grenade.position.y -= 0.3;
+    grenade.userData = {
+        dir: new THREE.Vector3(dir.x, 0.25, dir.z).normalize(), // arc upward
+        speed: 0.55,
+        vy: 0.25,          // initial upward velocity
+        life: 0,
+        maxLife: 90        // auto-explode after ~1.5s if no collision
+    };
+    state.scene.add(grenade);
+    state.grenadeProjectiles.push(grenade);
 }

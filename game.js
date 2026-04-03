@@ -46,9 +46,7 @@ window.mentorChoice = (choice) => {
     state.isMathActive = false;
 
     if (choice === 1) {
-        sfx.levelUp();
-        state.currentLevel++; state.lives++; showMsg("SKIPPED TO LEVEL " + state.currentLevel);
-        setTimeout(startLevel, 1500);
+        state.grenades++; updateHUD(); showMsg("+1 GRENADE!"); sfx.win();
     } else if (choice === 2) {
         state.bombs += 2; updateHUD(); showMsg("+2 BOMBS!"); sfx.win();
     } else if (choice === 3) {
@@ -65,7 +63,7 @@ window.mentorChoice = (choice) => {
 window.startAdminGame = () => {
     const lvl = parseInt(document.getElementById('admin-lvl-input').value) || 1;
     if (audioCtx.state === 'suspended') audioCtx.resume();
-    state.gold = 1000; state.lives = 3; state.bombs = 3; state.currentLevel = lvl; state.inventory = [];
+    state.gold = 1000; state.lives = 3; state.bombs = 3; state.grenades = 3; state.currentLevel = lvl; state.inventory = [];
     state.hasGun = true; state.ammo = 5;
     document.getElementById('landing-page').style.display = 'none';
     document.getElementById('how-to-screen').style.display = 'none';
@@ -103,7 +101,21 @@ function animate() {
             // Hold C to crouch, release to stand (disabled mid-air)
             state.isCrouching = !!keysDown['KeyC'] && !state.isDead && state.jumpVelocity === 0;
             document.getElementById('crouch-hud').style.display = state.isCrouching ? 'block' : 'none';
-            const baseY = state.isCrouching ? CROUCH_HEIGHT : STAND_HEIGHT;
+            const playerHeight = state.isCrouching ? CROUCH_HEIGHT : STAND_HEIGHT;
+
+            // Find the highest placed block directly underfoot to use as dynamic floor
+            let floorY = 0;
+            if (state.jumpVelocity <= 0) {
+                for (const block of state.collidables) {
+                    if (block.userData.type !== 'placed') continue;
+                    const blockTop = block.position.y + 0.5;
+                    if (Math.abs(state.camera.position.x - block.position.x) < 1.1 &&
+                        Math.abs(state.camera.position.z - block.position.z) < 1.1) {
+                        floorY = Math.max(floorY, blockTop);
+                    }
+                }
+            }
+            const baseY = floorY + playerHeight;
 
             // Jump physics — override Y lerp while airborne
             if (state.jumpVelocity !== 0) {
@@ -125,7 +137,10 @@ function animate() {
                 if (keysDown['ArrowRight'] || keysDown['KeyD']) state.camera.rotation.y -= 0.045;
             }
 
-            const playerBB = new THREE.Box3().setFromCenterAndSize(state.camera.position, new THREE.Vector3(1.2, 1, 1.2));
+            const playerBB = new THREE.Box3(
+                new THREE.Vector3(state.camera.position.x - 0.6, state.camera.position.y - playerHeight, state.camera.position.z - 0.6),
+                new THREE.Vector3(state.camera.position.x + 0.6, state.camera.position.y + 0.5, state.camera.position.z + 0.6)
+            );
             for (let w of state.collidables) {
                 if (playerBB.intersectsBox(new THREE.Box3().setFromObject(w))) { state.camera.position.copy(old); break; }
             }
@@ -207,6 +222,22 @@ function animate() {
                     }
                 }
             }
+
+            // --- SKY PORTAL CHECK ---
+            if (state.skyPortal) {
+                const sp = state.skyPortal.position;
+                const dx = state.camera.position.x - sp.x;
+                const dy = state.camera.position.y - sp.y;
+                const dz = state.camera.position.z - sp.z;
+                if (Math.sqrt(dx * dx + dy * dy + dz * dz) < 2.5) {
+                    sfx.levelUp();
+                    state.currentLevel++;
+                    state.lives++;
+                    state.skyPortal = null;
+                    showMsg("PORTAL! LEVEL " + state.currentLevel + "!");
+                    setTimeout(startLevel, 1500);
+                }
+            }
         }
     }
 
@@ -268,6 +299,12 @@ function animate() {
     }
 
     state.entities.forEach(i => {
+        if (i.userData.type === 'sky_portal') {
+            i.rotation.y += 0.02;
+            const pulse = 0.2 + Math.abs(Math.sin(Date.now() * 0.003)) * 0.35;
+            if (i.children[2]) i.children[2].material.opacity = pulse; // glow pulses
+            return;
+        }
         if (i.userData.type === 'lava') {
             // Pulsing orange-red glow
             const pulse = 0.8 + Math.sin(Date.now() * 0.004 + i.position.x) * 0.4;
@@ -298,6 +335,69 @@ function animate() {
             i.position.y = 1.6 + Math.sin(time) * 0.3;
         }
     });
+
+    // --- GRENADE PROJECTILE LOOP ---
+    for (let i = state.grenadeProjectiles.length - 1; i >= 0; i--) {
+        const g = state.grenadeProjectiles[i];
+        const gd = g.userData;
+        gd.life++;
+
+        // Arc physics
+        gd.vy -= GRAVITY;
+        g.position.addScaledVector(gd.dir, gd.speed);
+        g.position.y += gd.vy;
+        g.rotation.x += 0.25;
+        g.rotation.z += 0.15;
+
+        // Check collision with collidables or ground
+        let hitGround = g.position.y <= 0.18;
+        let hitWall = false;
+        if (!hitGround) {
+            for (const w of state.collidables) {
+                if (new THREE.Box3().setFromObject(w).containsPoint(g.position)) { hitWall = true; break; }
+            }
+        }
+
+        const expired = gd.life >= gd.maxLife;
+        if (hitGround || hitWall || expired) {
+            const explodePos = g.position.clone();
+            state.scene.remove(g);
+            state.grenadeProjectiles.splice(i, 1);
+
+            // Flash light
+            const flash = new THREE.PointLight(0xff6600, 20, 22);
+            flash.position.copy(explodePos);
+            state.scene.add(flash);
+            const flash2 = new THREE.PointLight(0xffcc00, 10, 14);
+            flash2.position.copy(explodePos).add(new THREE.Vector3(0, 1, 0));
+            state.scene.add(flash2);
+            setTimeout(() => { state.scene.remove(flash); state.scene.remove(flash2); }, 250);
+
+            const RADIUS = 6;
+
+            // Destroy destructible walls
+            const wallsToRemove = state.collidables.filter(w =>
+                w.userData.type === 'destructible' && w.position.distanceTo(explodePos) < RADIUS
+            );
+            wallsToRemove.forEach(w => {
+                state.scene.remove(w);
+                state.collidables = state.collidables.filter(c => c !== w);
+            });
+
+            // Kill enemies
+            for (let j = state.enemies.length - 1; j >= 0; j--) {
+                const en = state.enemies[j];
+                if (en.position.distanceTo(explodePos) < RADIUS) {
+                    state.scene.remove(en);
+                    state.entities = state.entities.filter(e => e !== en);
+                    state.enemies.splice(j, 1);
+                }
+            }
+
+            showMsg("BOOM!");
+            sfx.shoot();
+        }
+    }
 
     // --- BULLET UPDATE LOOP ---
     for (let i = state.bullets.length - 1; i >= 0; i--) {

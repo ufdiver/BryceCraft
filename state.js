@@ -3,6 +3,7 @@ export const state = {
     gold: 0,
     lives: 3,
     bombs: 0,
+    grenades: 0,
     ammo: 0,
     hasGun: false,
     currentLevel: 1,
@@ -36,6 +37,7 @@ export const state = {
     discoveredItems: [],
     corridorCells: [],
     waterBounds: null,
+    skyPortal: null,
 
     // Scene object lists
     collidables: [],
@@ -43,6 +45,7 @@ export const state = {
     entities: [],
     enemies: [],
     bullets: [],
+    grenadeProjectiles: [],
     lavaPatches: [],
     laserBeams: [],
 
