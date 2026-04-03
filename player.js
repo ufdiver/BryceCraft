@@ -16,7 +16,7 @@ const BLOCK_TYPES = [
 let selectedBlockIdx = 0;
 
 window.addEventListener('keydown', e => {
-    if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space", "KeyB", "KeyF", "KeyC", "KeyX", "KeyV", "KeyG", "KeyT"].includes(e.code)) e.preventDefault();
+    if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space", "KeyB", "KeyE", "KeyF", "KeyC", "KeyX", "KeyV", "KeyG", "KeyT"].includes(e.code)) e.preventDefault();
     keysDown[e.code] = true;
     if (e.code === 'Space' && !state.isMathActive) handleGrab();
     if (e.code === 'KeyB' && !state.isMathActive) handleBomb();
@@ -24,6 +24,7 @@ window.addEventListener('keydown', e => {
     if (e.code === 'KeyT' && !state.isMathActive) handleGrenade();
     if (e.code === 'KeyV' && !state.isMathActive && !state.isDead) handlePlace();
     if (e.code === 'KeyG' && !state.isMathActive && !state.isDead) handleCycleBlock();
+    if (e.code === 'KeyE' && !state.isMathActive && !state.isDead) handleDestroy();
     if (e.code === 'KeyX' && !state.isMathActive && !state.isDead && state.jumpVelocity === 0 && !state.isCrouching) {
         state.jumpVelocity = JUMP_FORCE;
     }
@@ -315,6 +316,37 @@ export function handleCycleBlock() {
     selectedBlockIdx = (selectedBlockIdx + 1) % BLOCK_TYPES.length;
     const { name } = BLOCK_TYPES[selectedBlockIdx];
     showMsg(`BLOCK: ${name} (${selectedBlockIdx + 1}/${BLOCK_TYPES.length})`);
+}
+
+export function handleDestroy() {
+    const ray = new THREE.Raycaster();
+    ray.setFromCamera(new THREE.Vector2(0, 0), state.camera);
+
+    const placedBlocks = state.collidables.filter(b => b.userData.type === 'placed');
+    const hits = ray.intersectObjects(placedBlocks);
+    if (hits.length === 0 || hits[0].distance > 4) return;
+
+    const target = hits[0].object;
+    const tx = target.position.x;
+    const ty = target.position.y;
+    const tz = target.position.z;
+
+    // Remove the destroyed block
+    state.scene.remove(target);
+    state.collidables = state.collidables.filter(b => b !== target);
+    state.entities = state.entities.filter(b => b !== target);
+
+    // Drop all placed blocks above the removed block in the same column down by one unit
+    for (const block of state.collidables) {
+        if (block.userData.type === 'placed' &&
+            Math.abs(block.position.x - tx) < 0.1 &&
+            Math.abs(block.position.z - tz) < 0.1 &&
+            block.position.y > ty) {
+            block.position.y -= 1.0;
+        }
+    }
+
+    showMsg("BLOCK DESTROYED!");
 }
 
 export function handleGrenade() {
