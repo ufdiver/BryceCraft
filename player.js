@@ -276,11 +276,10 @@ export function handlePlace() {
     dir.y = 0;
     dir.normalize();
 
-    // Place ~3 units ahead, snapped to 1-unit grid, sitting on the floor
+    // Place ~3 units ahead, snapped to 1-unit grid
     const reach = 3;
     const bx = Math.round(state.camera.position.x + dir.x * reach);
     const bz = Math.round(state.camera.position.z + dir.z * reach);
-    const by = BLOCK / 2;
 
     // Restrict to outside the maze boundary
     const mazeMin = -CELL / 2;
@@ -290,14 +289,16 @@ export function handlePlace() {
         return;
     }
 
-    // Don't stack on an existing placed block at the exact same spot
-    const occupied = state.collidables.some(
-        w => w.userData.type === 'placed' &&
-             Math.abs(w.position.x - bx) < 0.1 &&
-             Math.abs(w.position.z - bz) < 0.1 &&
-             Math.abs(w.position.y - by) < 0.1
-    );
-    if (occupied) return;
+    // Find the top of the highest existing placed block at this XZ column
+    let stackTop = 0;
+    for (const w of state.collidables) {
+        if (w.userData.type === 'placed' &&
+            Math.abs(w.position.x - bx) < 0.1 &&
+            Math.abs(w.position.z - bz) < 0.1) {
+            stackTop = Math.max(stackTop, w.position.y + BLOCK / 2);
+        }
+    }
+    const by = stackTop + BLOCK / 2;
 
     const { color, name } = BLOCK_TYPES[selectedBlockIdx];
     const mat = new THREE.MeshStandardMaterial({ color });
