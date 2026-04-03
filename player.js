@@ -16,11 +16,12 @@ const BLOCK_TYPES = [
 let selectedBlockIdx = 0;
 
 window.addEventListener('keydown', e => {
-    if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space", "KeyB", "KeyF", "KeyC", "KeyX", "KeyV", "KeyG"].includes(e.code)) e.preventDefault();
+    if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space", "KeyB", "KeyF", "KeyC", "KeyX", "KeyV", "KeyG", "KeyT"].includes(e.code)) e.preventDefault();
     keysDown[e.code] = true;
     if (e.code === 'Space' && !state.isMathActive) handleGrab();
     if (e.code === 'KeyB' && !state.isMathActive) handleBomb();
     if (e.code === 'KeyF' && !state.isMathActive) handleShoot();
+    if (e.code === 'KeyT' && !state.isMathActive) handleGrenade();
     if (e.code === 'KeyV' && !state.isMathActive && !state.isDead) handlePlace();
     if (e.code === 'KeyG' && !state.isMathActive && !state.isDead) handleCycleBlock();
     if (e.code === 'KeyX' && !state.isMathActive && !state.isDead && state.jumpVelocity === 0 && !state.isCrouching) {
@@ -314,4 +315,39 @@ export function handleCycleBlock() {
     selectedBlockIdx = (selectedBlockIdx + 1) % BLOCK_TYPES.length;
     const { name } = BLOCK_TYPES[selectedBlockIdx];
     showMsg(`BLOCK: ${name} (${selectedBlockIdx + 1}/${BLOCK_TYPES.length})`);
+}
+
+export function handleGrenade() {
+    if (state.grenades <= 0) { showMsg("NO GRENADES!"); return; }
+    state.grenades--;
+    updateHUD();
+
+    const ray = new THREE.Raycaster();
+    ray.setFromCamera(new THREE.Vector2(0, 0), state.camera);
+    const hits = ray.intersectObjects(state.collidables);
+
+    const explodePos = hits.length > 0 && hits[0].distance < 20
+        ? hits[0].point.clone()
+        : state.camera.position.clone().addScaledVector(
+            (() => { const d = new THREE.Vector3(); state.camera.getWorldDirection(d); return d; })(), 8
+          );
+
+    // Flash
+    const flash = new THREE.PointLight(0xff6600, 12, 18);
+    flash.position.copy(explodePos);
+    state.scene.add(flash);
+    setTimeout(() => state.scene.remove(flash), 200);
+
+    // Destroy destructible walls within radius
+    const RADIUS = 6;
+    const toRemove = state.collidables.filter(w =>
+        w.userData.type === 'destructible' && w.position.distanceTo(explodePos) < RADIUS
+    );
+    toRemove.forEach(w => {
+        state.scene.remove(w);
+        state.collidables = state.collidables.filter(c => c !== w);
+    });
+
+    showMsg("GRENADE! BOOM!");
+    sfx.shoot();
 }

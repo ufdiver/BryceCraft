@@ -46,9 +46,7 @@ window.mentorChoice = (choice) => {
     state.isMathActive = false;
 
     if (choice === 1) {
-        sfx.levelUp();
-        state.currentLevel++; state.lives++; showMsg("SKIPPED TO LEVEL " + state.currentLevel);
-        setTimeout(startLevel, 1500);
+        state.grenades++; updateHUD(); showMsg("+1 GRENADE!"); sfx.win();
     } else if (choice === 2) {
         state.bombs += 2; updateHUD(); showMsg("+2 BOMBS!"); sfx.win();
     } else if (choice === 3) {
@@ -224,6 +222,22 @@ function animate() {
                     }
                 }
             }
+
+            // --- SKY PORTAL CHECK ---
+            if (state.skyPortal) {
+                const sp = state.skyPortal.position;
+                const dx = state.camera.position.x - sp.x;
+                const dy = state.camera.position.y - sp.y;
+                const dz = state.camera.position.z - sp.z;
+                if (Math.sqrt(dx * dx + dy * dy + dz * dz) < 2.5) {
+                    sfx.levelUp();
+                    state.currentLevel++;
+                    state.lives++;
+                    state.skyPortal = null;
+                    showMsg("PORTAL! LEVEL " + state.currentLevel + "!");
+                    setTimeout(startLevel, 1500);
+                }
+            }
         }
     }
 
@@ -285,6 +299,12 @@ function animate() {
     }
 
     state.entities.forEach(i => {
+        if (i.userData.type === 'sky_portal') {
+            i.rotation.y += 0.02;
+            const pulse = 0.2 + Math.abs(Math.sin(Date.now() * 0.003)) * 0.35;
+            if (i.children[2]) i.children[2].material.opacity = pulse; // glow pulses
+            return;
+        }
         if (i.userData.type === 'lava') {
             // Pulsing orange-red glow
             const pulse = 0.8 + Math.sin(Date.now() * 0.004 + i.position.x) * 0.4;

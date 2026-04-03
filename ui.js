@@ -14,6 +14,14 @@ export function updateHUD() {
     } else {
         gunHUD.style.display = 'none';
     }
+
+    const grenadeHUD = document.getElementById('grenade-hud');
+    if (state.grenades > 0) {
+        grenadeHUD.style.display = 'block';
+        document.getElementById('grenade-val').innerText = state.grenades;
+    } else {
+        grenadeHUD.style.display = 'none';
+    }
 }
 
 export function showMsg(t) {
