@@ -6,13 +6,23 @@ import { startLevel } from './world.js';
 
 export const keysDown = {};
 
+const BLOCK_TYPES = [
+    { name: 'Dirt',  color: 0x8B5E3C },
+    { name: 'Rock',  color: 0x787878 },
+    { name: 'Wood',  color: 0x6B3A2A },
+    { name: 'Grass', color: 0x4CAF50 },
+    { name: 'Metal', color: 0x90A4AE },
+];
+let selectedBlockIdx = 0;
+
 window.addEventListener('keydown', e => {
-    if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space", "KeyB", "KeyF", "KeyC", "KeyX", "KeyV"].includes(e.code)) e.preventDefault();
+    if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space", "KeyB", "KeyF", "KeyC", "KeyX", "KeyV", "KeyG"].includes(e.code)) e.preventDefault();
     keysDown[e.code] = true;
     if (e.code === 'Space' && !state.isMathActive) handleGrab();
     if (e.code === 'KeyB' && !state.isMathActive) handleBomb();
     if (e.code === 'KeyF' && !state.isMathActive) handleShoot();
     if (e.code === 'KeyV' && !state.isMathActive && !state.isDead) handlePlace();
+    if (e.code === 'KeyG' && !state.isMathActive && !state.isDead) handleCycleBlock();
     if (e.code === 'KeyX' && !state.isMathActive && !state.isDead && state.jumpVelocity === 0 && !state.isCrouching) {
         state.jumpVelocity = JUMP_FORCE;
     }
@@ -289,11 +299,18 @@ export function handlePlace() {
     );
     if (occupied) return;
 
-    const mat = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
+    const { color, name } = BLOCK_TYPES[selectedBlockIdx];
+    const mat = new THREE.MeshStandardMaterial({ color });
     const block = new THREE.Mesh(new THREE.BoxGeometry(BLOCK, BLOCK, BLOCK), mat);
     block.position.set(bx, by, bz);
     block.userData = { type: 'placed' };
     state.scene.add(block);
     state.collidables.push(block);
     state.entities.push(block);
+}
+
+export function handleCycleBlock() {
+    selectedBlockIdx = (selectedBlockIdx + 1) % BLOCK_TYPES.length;
+    const { name } = BLOCK_TYPES[selectedBlockIdx];
+    showMsg(`BLOCK: ${name} (${selectedBlockIdx + 1}/${BLOCK_TYPES.length})`);
 }
