@@ -259,29 +259,39 @@ export function processLogic(obj) {
 }
 
 export function handlePlace() {
-    // Find the grid cell one step ahead of the player
+    const BLOCK = 1.0; // Minecraft-scale block size
+
     const dir = new THREE.Vector3();
     state.camera.getWorldDirection(dir);
     dir.y = 0;
     dir.normalize();
 
-    const targetX = state.camera.position.x + dir.x * CELL;
-    const targetZ = state.camera.position.z + dir.z * CELL;
-    const gx = Math.round(targetX / CELL);
-    const gy = Math.round(targetZ / CELL);
+    // Place ~3 units ahead, snapped to 1-unit grid, sitting on the floor
+    const reach = 3;
+    const bx = Math.round(state.camera.position.x + dir.x * reach);
+    const bz = Math.round(state.camera.position.z + dir.z * reach);
+    const by = BLOCK / 2;
 
-    // Bounds check
-    if (gx < 0 || gx >= GRID_SIZE || gy < 0 || gy >= GRID_SIZE) return;
+    // Restrict to outside the maze boundary
+    const mazeMin = -CELL / 2;
+    const mazeMax = (GRID_SIZE - 1) * CELL + CELL / 2;
+    if (bx > mazeMin && bx < mazeMax && bz > mazeMin && bz < mazeMax) {
+        showMsg("CAN'T BUILD INSIDE THE MAZE!");
+        return;
+    }
 
-    // Don't place where a collidable already exists
+    // Don't stack on an existing placed block at the exact same spot
     const occupied = state.collidables.some(
-        w => Math.round(w.position.x / CELL) === gx && Math.round(w.position.z / CELL) === gy
+        w => w.userData.type === 'placed' &&
+             Math.abs(w.position.x - bx) < 0.1 &&
+             Math.abs(w.position.z - bz) < 0.1 &&
+             Math.abs(w.position.y - by) < 0.1
     );
-    if (occupied) { showMsg("CAN'T PLACE THERE!"); return; }
+    if (occupied) return;
 
     const mat = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
-    const block = new THREE.Mesh(new THREE.BoxGeometry(CELL, CELL, CELL), mat);
-    block.position.set(gx * CELL, CELL / 2, gy * CELL);
+    const block = new THREE.Mesh(new THREE.BoxGeometry(BLOCK, BLOCK, BLOCK), mat);
+    block.position.set(bx, by, bz);
     block.userData = { type: 'placed' };
     state.scene.add(block);
     state.collidables.push(block);
