@@ -45,6 +45,7 @@ export const state = {
     entities: [],
     enemies: [],
     bullets: [],
+    grenadeProjectiles: [],
     lavaPatches: [],
     laserBeams: [],
 

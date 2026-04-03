@@ -119,7 +119,7 @@ export function startLevel() {
     state.collidables.forEach(w => state.scene.remove(w));
     state.enemies.forEach(e => state.scene.remove(e));
     state.interactables = []; state.entities = []; state.collidables = []; state.enemies = [];
-    state.lavaPatches = []; state.laserBeams = []; state.skyPortal = null;
+    state.lavaPatches = []; state.laserBeams = []; state.skyPortal = null; state.grenadeProjectiles = [];
     state.inventory = []; state.discoveredItems = [];
     state.explored = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(false));
 
@@ -447,7 +447,7 @@ export function startLevel() {
         const glow = new THREE.Mesh(new THREE.TorusGeometry(1.9, 0.35, 16, 64), glowMat);
 
         portalGroup.add(ring, inner, glow);
-        portalGroup.position.set(px, 6, pz); // y=6 is above maze walls (height=4)
+        portalGroup.position.set(px, 16, pz); // y=16 — high above walls, unreachable by jumping
         portalGroup.userData = { type: 'sky_portal' };
 
         state.scene.add(portalGroup);

@@ -321,33 +321,23 @@ export function handleGrenade() {
     if (state.grenades <= 0) { showMsg("NO GRENADES!"); return; }
     state.grenades--;
     updateHUD();
-
-    const ray = new THREE.Raycaster();
-    ray.setFromCamera(new THREE.Vector2(0, 0), state.camera);
-    const hits = ray.intersectObjects(state.collidables);
-
-    const explodePos = hits.length > 0 && hits[0].distance < 20
-        ? hits[0].point.clone()
-        : state.camera.position.clone().addScaledVector(
-            (() => { const d = new THREE.Vector3(); state.camera.getWorldDirection(d); return d; })(), 8
-          );
-
-    // Flash
-    const flash = new THREE.PointLight(0xff6600, 12, 18);
-    flash.position.copy(explodePos);
-    state.scene.add(flash);
-    setTimeout(() => state.scene.remove(flash), 200);
-
-    // Destroy destructible walls within radius
-    const RADIUS = 6;
-    const toRemove = state.collidables.filter(w =>
-        w.userData.type === 'destructible' && w.position.distanceTo(explodePos) < RADIUS
-    );
-    toRemove.forEach(w => {
-        state.scene.remove(w);
-        state.collidables = state.collidables.filter(c => c !== w);
-    });
-
-    showMsg("GRENADE! BOOM!");
     sfx.shoot();
+
+    const dir = new THREE.Vector3();
+    state.camera.getWorldDirection(dir);
+
+    // Small dark green sphere
+    const grenadeMat = new THREE.MeshStandardMaterial({ color: 0x2d4a1e, roughness: 0.8 });
+    const grenade = new THREE.Mesh(new THREE.SphereGeometry(0.18, 8, 8), grenadeMat);
+    grenade.position.copy(state.camera.position).addScaledVector(dir, 1.2);
+    grenade.position.y -= 0.3;
+    grenade.userData = {
+        dir: new THREE.Vector3(dir.x, 0.25, dir.z).normalize(), // arc upward
+        speed: 0.55,
+        vy: 0.25,          // initial upward velocity
+        life: 0,
+        maxLife: 90        // auto-explode after ~1.5s if no collision
+    };
+    state.scene.add(grenade);
+    state.grenadeProjectiles.push(grenade);
 }
