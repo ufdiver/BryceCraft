@@ -103,7 +103,21 @@ function animate() {
             // Hold C to crouch, release to stand (disabled mid-air)
             state.isCrouching = !!keysDown['KeyC'] && !state.isDead && state.jumpVelocity === 0;
             document.getElementById('crouch-hud').style.display = state.isCrouching ? 'block' : 'none';
-            const baseY = state.isCrouching ? CROUCH_HEIGHT : STAND_HEIGHT;
+            const playerHeight = state.isCrouching ? CROUCH_HEIGHT : STAND_HEIGHT;
+
+            // Find the highest placed block directly underfoot to use as dynamic floor
+            let floorY = 0;
+            if (state.jumpVelocity <= 0) {
+                for (const block of state.collidables) {
+                    if (block.userData.type !== 'placed') continue;
+                    const blockTop = block.position.y + 0.5;
+                    if (Math.abs(state.camera.position.x - block.position.x) < 1.1 &&
+                        Math.abs(state.camera.position.z - block.position.z) < 1.1) {
+                        floorY = Math.max(floorY, blockTop);
+                    }
+                }
+            }
+            const baseY = floorY + playerHeight;
 
             // Jump physics — override Y lerp while airborne
             if (state.jumpVelocity !== 0) {
@@ -125,7 +139,10 @@ function animate() {
                 if (keysDown['ArrowRight'] || keysDown['KeyD']) state.camera.rotation.y -= 0.045;
             }
 
-            const playerBB = new THREE.Box3().setFromCenterAndSize(state.camera.position, new THREE.Vector3(1.2, 1, 1.2));
+            const playerBB = new THREE.Box3(
+                new THREE.Vector3(state.camera.position.x - 0.6, state.camera.position.y - playerHeight, state.camera.position.z - 0.6),
+                new THREE.Vector3(state.camera.position.x + 0.6, state.camera.position.y + 0.5, state.camera.position.z + 0.6)
+            );
             for (let w of state.collidables) {
                 if (playerBB.intersectsBox(new THREE.Box3().setFromObject(w))) { state.camera.position.copy(old); break; }
             }
