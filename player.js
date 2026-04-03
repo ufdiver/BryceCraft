@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { state, CELL, STAND_HEIGHT, CROUCH_HEIGHT, JUMP_FORCE } from './state.js';
+import { state, CELL, GRID_SIZE, STAND_HEIGHT, CROUCH_HEIGHT, JUMP_FORCE } from './state.js';
 import { sfx } from './audio.js';
 import { updateHUD, showMsg } from './ui.js';
 import { startLevel } from './world.js';
@@ -7,11 +7,12 @@ import { startLevel } from './world.js';
 export const keysDown = {};
 
 window.addEventListener('keydown', e => {
-    if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space", "KeyB", "KeyF", "KeyC", "KeyX"].includes(e.code)) e.preventDefault();
+    if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space", "KeyB", "KeyF", "KeyC", "KeyX", "KeyV"].includes(e.code)) e.preventDefault();
     keysDown[e.code] = true;
     if (e.code === 'Space' && !state.isMathActive) handleGrab();
     if (e.code === 'KeyB' && !state.isMathActive) handleBomb();
     if (e.code === 'KeyF' && !state.isMathActive) handleShoot();
+    if (e.code === 'KeyV' && !state.isMathActive && !state.isDead) handlePlace();
     if (e.code === 'KeyX' && !state.isMathActive && !state.isDead && state.jumpVelocity === 0 && !state.isCrouching) {
         state.jumpVelocity = JUMP_FORCE;
     }
@@ -255,4 +256,34 @@ export function processLogic(obj) {
             showMsg("UNLOCKED!");
         } else showMsg("NEED THE " + d.id);
     }
+}
+
+export function handlePlace() {
+    // Find the grid cell one step ahead of the player
+    const dir = new THREE.Vector3();
+    state.camera.getWorldDirection(dir);
+    dir.y = 0;
+    dir.normalize();
+
+    const targetX = state.camera.position.x + dir.x * CELL;
+    const targetZ = state.camera.position.z + dir.z * CELL;
+    const gx = Math.round(targetX / CELL);
+    const gy = Math.round(targetZ / CELL);
+
+    // Bounds check
+    if (gx < 0 || gx >= GRID_SIZE || gy < 0 || gy >= GRID_SIZE) return;
+
+    // Don't place where a collidable already exists
+    const occupied = state.collidables.some(
+        w => Math.round(w.position.x / CELL) === gx && Math.round(w.position.z / CELL) === gy
+    );
+    if (occupied) { showMsg("CAN'T PLACE THERE!"); return; }
+
+    const mat = new THREE.MeshStandardMaterial({ color: 0x8B4513 });
+    const block = new THREE.Mesh(new THREE.BoxGeometry(CELL, CELL, CELL), mat);
+    block.position.set(gx * CELL, CELL / 2, gy * CELL);
+    block.userData = { type: 'placed' };
+    state.scene.add(block);
+    state.collidables.push(block);
+    state.entities.push(block);
 }
