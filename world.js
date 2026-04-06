@@ -120,6 +120,7 @@ export function startLevel() {
     state.enemies.forEach(e => state.scene.remove(e));
     state.interactables = []; state.entities = []; state.collidables = []; state.enemies = [];
     state.lavaPatches = []; state.laserBeams = []; state.skyPortal = null; state.grenadeProjectiles = [];
+    state.isFlying = false; state.launchPlate = null;
     state.inventory = []; state.discoveredItems = [];
     state.explored = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(false));
 
@@ -302,6 +303,29 @@ export function startLevel() {
                 state.scene.add(lb); state.entities.push(lb); state.laserBeams.push(lb);
             }
             placed++;
+        }
+    }
+
+    // --- LAUNCH PLATE (level 3 only) ---
+    if (state.currentLevel === 3) {
+        const shuffled = [...state.corridorCells].sort(() => Math.random() - 0.5);
+        let plateCell = null;
+        for (const cell of shuffled) {
+            if (!occupied.has(`${cell.x},${cell.y}`) && Math.abs(cell.x - 1) + Math.abs(cell.y - 1) > 6) {
+                plateCell = cell;
+                break;
+            }
+        }
+        if (plateCell) {
+            occupied.add(`${plateCell.x},${plateCell.y}`);
+            const px = plateCell.x * CELL, pz = plateCell.y * CELL;
+            const plateMat = new THREE.MeshStandardMaterial({ color: 0x888888, metalness: 0.7, roughness: 0.25, emissive: new THREE.Color(0x334455), emissiveIntensity: 0.4 });
+            const plate = new THREE.Mesh(new THREE.BoxGeometry(CELL * 0.75, 0.1, CELL * 0.75), plateMat);
+            plate.position.set(px, 0.06, pz);
+            plate.userData = { type: 'launch_plate', cx: px, cz: pz, hx: (CELL * 0.75) / 2, hz: (CELL * 0.75) / 2 };
+            state.scene.add(plate);
+            state.entities.push(plate);
+            state.launchPlate = plate;
         }
     }
 
