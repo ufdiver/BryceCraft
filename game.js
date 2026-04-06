@@ -46,11 +46,16 @@ window.mentorChoice = (choice) => {
     state.isMathActive = false;
 
     if (choice === 1) {
-        state.grenades++; updateHUD(); showMsg("+1 GRENADE!"); sfx.win();
+        state.grenades += 3; updateHUD(); showMsg("+3 GRENADES!"); sfx.win();
     } else if (choice === 2) {
         state.bombs += 2; updateHUD(); showMsg("+2 BOMBS!"); sfx.win();
     } else if (choice === 3) {
-        state.gold += 500; updateHUD(); showMsg("+500 GOLD!"); sfx.win();
+        if (state.currentLevel === 1) {
+            state.currentLevel++; updateHUD(); showMsg("SKIPPING TO LEVEL 2!"); sfx.levelUp();
+            setTimeout(startLevel, 1500);
+        } else {
+            state.gold += 500; updateHUD(); showMsg("+500 GOLD!"); sfx.win();
+        }
     }
 
     if (choice !== 0 && state.currentMentorObj) {
