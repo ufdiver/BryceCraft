@@ -169,7 +169,7 @@ function animate() {
                 const ePos = new THREE.Vector2(en.position.x, en.position.z);
                 const distXZ = pPos.distanceTo(ePos);
 
-                if (Date.now() - state.lastHit > 1000 && (distXZ < 1.8 || playerBB.intersectsBox(enBB))) {
+                if (!state.isFlying && Date.now() - state.lastHit > 1000 && (distXZ < 1.8 || playerBB.intersectsBox(enBB))) {
                     state.lastHit = Date.now();
                     handleDeath("TOUCHED ENEMY! -1 LIFE");
                 }
