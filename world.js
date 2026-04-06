@@ -140,9 +140,9 @@ export function startLevel() {
         });
     }
 
-    // For doors, we pick actual corridor connectors rather than random path nodes
-    const rDoor = state.corridorCells[Math.floor(state.corridorCells.length * 0.35)];
-    const bDoor = state.corridorCells[Math.floor(state.corridorCells.length * 0.75)];
+    // Place doors on mainPath so ordering is guaranteed: start → rDoor → bDoor → trophy
+    const rDoor = mainPath[Math.floor(mainPath.length * 0.35)];
+    const bDoor = mainPath[Math.floor(mainPath.length * 0.70)];
     const trophy = mainPath[mainPath.length - 1];
     occupied.add(`${rDoor.x},${rDoor.y}`);
     occupied.add(`${bDoor.x},${bDoor.y}`);
