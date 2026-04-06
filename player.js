@@ -18,15 +18,30 @@ let selectedBlockIdx = 0;
 window.addEventListener('keydown', e => {
     if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space", "KeyB", "KeyE", "KeyF", "KeyC", "KeyX", "KeyV", "KeyG", "KeyT"].includes(e.code)) e.preventDefault();
     keysDown[e.code] = true;
-    if (e.code === 'Space' && !state.isMathActive) handleGrab();
+    if (e.code === 'Space' && !state.isMathActive) {
+        if (state.isFlying) {
+            state.isFlying = false;
+            state.jumpVelocity = -0.5;
+            showMsg("DROPPING!");
+        } else {
+            handleGrab();
+        }
+    }
     if (e.code === 'KeyB' && !state.isMathActive) handleBomb();
     if (e.code === 'KeyF' && !state.isMathActive) handleShoot();
     if (e.code === 'KeyT' && !state.isMathActive) handleGrenade();
     if (e.code === 'KeyV' && !state.isMathActive && !state.isDead) handlePlace();
     if (e.code === 'KeyG' && !state.isMathActive && !state.isDead) handleCycleBlock();
     if (e.code === 'KeyE' && !state.isMathActive && !state.isDead) handleDestroy();
-    if (e.code === 'KeyX' && !state.isMathActive && !state.isDead && state.jumpVelocity === 0 && !state.isCrouching) {
-        state.jumpVelocity = JUMP_FORCE;
+    if (e.code === 'KeyX' && !state.isMathActive && !state.isDead && state.jumpVelocity === 0 && !state.isCrouching && !state.isFlying) {
+        if (state.launchPlate) {
+            const lp = state.launchPlate;
+            const onPlate = Math.abs(state.camera.position.x - lp.userData.cx) < lp.userData.hx + 0.3 &&
+                            Math.abs(state.camera.position.z - lp.userData.cz) < lp.userData.hz + 0.3;
+            state.jumpVelocity = onPlate ? 1.0 : JUMP_FORCE;
+        } else {
+            state.jumpVelocity = JUMP_FORCE;
+        }
     }
 });
 window.addEventListener('keyup', e => keysDown[e.code] = false);

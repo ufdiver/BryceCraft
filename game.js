@@ -108,9 +108,16 @@ function animate() {
             document.getElementById('crouch-hud').style.display = state.isCrouching ? 'block' : 'none';
             const playerHeight = state.isCrouching ? CROUCH_HEIGHT : STAND_HEIGHT;
 
+            // Auto-enter fly mode when a launch-pad super-jump clears the maze walls
+            if (!state.isFlying && state.launchPlate && state.camera.position.y > CELL + playerHeight + 2) {
+                state.isFlying = true;
+                state.jumpVelocity = 0;
+                showMsg("FLYING! PRESS SPACE TO LAND");
+            }
+
             // Find the highest placed block directly underfoot to use as dynamic floor
             let floorY = 0;
-            if (state.jumpVelocity <= 0) {
+            if (!state.isFlying && state.jumpVelocity <= 0) {
                 for (const block of state.collidables) {
                     if (block.userData.type !== 'placed') continue;
                     const blockTop = block.position.y + 0.5;
@@ -122,8 +129,10 @@ function animate() {
             }
             const baseY = floorY + playerHeight;
 
-            // Jump physics — override Y lerp while airborne
-            if (state.jumpVelocity !== 0) {
+            // Jump physics — override Y lerp while airborne; skip entirely while flying
+            if (state.isFlying) {
+                // Hover at current height — WASD handles horizontal movement
+            } else if (state.jumpVelocity !== 0) {
                 state.camera.position.y += state.jumpVelocity;
                 state.jumpVelocity -= GRAVITY;
                 if (state.camera.position.y <= baseY) {
