@@ -259,6 +259,8 @@ export function processLogic(obj) {
     } else if (d.type === 'mentor_choice') {
         state.isMathActive = true;
         state.currentMentorObj = obj;
+        const btn3 = document.getElementById('mentor-btn-3');
+        if (btn3) btn3.textContent = state.currentLevel === 1 ? '3. Skip to Level 2' : '3. Receive 500 gold pieces';
         document.getElementById('mentor-ui').style.display = 'flex';
     } else if (d.type === 'talk') {
         showMsg(d.msg);
