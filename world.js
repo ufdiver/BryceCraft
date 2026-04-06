@@ -471,7 +471,7 @@ export function startLevel() {
         const glow = new THREE.Mesh(new THREE.TorusGeometry(1.9, 0.35, 16, 64), glowMat);
 
         portalGroup.add(ring, inner, glow);
-        const portalY = state.currentLevel === 2 ? 5.5 : 16; // level 2: just above wall tops (CELL=4); level 3+: high and unreachable
+        const portalY = state.currentLevel === 2 ? 7.5 : 16; // level 2: requires stacking ≥1 block to reach; level 3+: high and unreachable
         portalGroup.position.set(px, portalY, pz);
         portalGroup.userData = { type: 'sky_portal' };
 
