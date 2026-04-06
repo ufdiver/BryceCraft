@@ -20,6 +20,8 @@ export const state = {
     // Physics
     isCrouching: false,
     jumpVelocity: 0,
+    isFlying: false,
+    launchPlate: null,
 
     // Boat / ferryman
     boatMesh: null,
