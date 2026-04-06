@@ -108,8 +108,8 @@ function animate() {
             document.getElementById('crouch-hud').style.display = state.isCrouching ? 'block' : 'none';
             const playerHeight = state.isCrouching ? CROUCH_HEIGHT : STAND_HEIGHT;
 
-            // Auto-enter fly mode when a launch-pad super-jump clears the maze walls
-            if (!state.isFlying && state.launchPlate && state.camera.position.y > CELL + playerHeight + 2) {
+            // Auto-enter fly mode when a launch-pad super-jump clears the maze walls (upward only)
+            if (!state.isFlying && state.launchPlate && state.jumpVelocity > 0 && state.camera.position.y > CELL + playerHeight + 2) {
                 state.isFlying = true;
                 state.jumpVelocity = 0;
                 showMsg("FLYING! PRESS SPACE TO LAND");
