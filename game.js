@@ -140,6 +140,7 @@ window.mentorChoice = (choice) => {
 };
 
 window.startAdminGame = () => {
+    state.isAdmin = true;
     const lvl = parseInt(document.getElementById('admin-lvl-input').value) || 1;
     if (audioCtx.state === 'suspended') audioCtx.resume();
     state.gold = 1000; state.lives = 3; state.bombs = 3; state.grenades = 3; state.currentLevel = lvl; state.inventory = [];
@@ -210,7 +211,9 @@ function animate() {
 
             // Jump physics — override Y lerp while airborne; skip entirely while flying
             if (state.isFlying) {
-                // Hover at current height — WASD handles horizontal movement
+                // Flying vertical movement: Space=Up, C=Down
+                if (keysDown['Space']) state.camera.position.y += 0.15;
+                if (keysDown['KeyC']) state.camera.position.y -= 0.15;
             } else if (state.jumpVelocity !== 0) {
                 state.camera.position.y += state.jumpVelocity;
                 state.jumpVelocity -= GRAVITY;

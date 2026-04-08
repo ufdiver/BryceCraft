@@ -100,24 +100,28 @@ export function spawnPelletShop(gx, gy, yOff = 0) {
 
 export function spawnDoor(gx, gy, id, col, yOff = 0) {
     // Check cross-neighbors to see where the walls are to bridge them
-    const hasLeftWall = state.mazeData[gy][gx - 1] === 1;
-    const hasRightWall = state.mazeData[gy][gx + 1] === 1;
-    const hasTopWall = state.mazeData[gy - 1][gx] === 1;
-    const hasBotWall = state.mazeData[gy + 1][gx] === 1;
+    const hasLeftWall = gx > 0 && state.mazeData[gy][gx - 1] === 1;
+    const hasRightWall = gx < GRID_SIZE - 1 && state.mazeData[gy][gx + 1] === 1;
+    const hasTopWall = gy > 0 && state.mazeData[gy - 1][gx] === 1;
+    const hasBotWall = gy < GRID_SIZE - 1 && state.mazeData[gy + 1][gx] === 1;
 
-    const d = new THREE.Mesh(new THREE.BoxGeometry(CELL * 1.5, CELL, 0.4), new THREE.MeshStandardMaterial({ color: col, transparent: true, opacity: 0.6 }));
+    // Door is BoxGeometry(Width, Height, Depth). Default is spanning X.
+    const d = new THREE.Mesh(
+        new THREE.BoxGeometry(CELL * 2.2, CELL, 0.8), // Even wider to ensure bridge
+        new THREE.MeshStandardMaterial({ color: col, transparent: true, opacity: 0.6 })
+    );
     d.position.set(gx * CELL, (CELL / 2) + yOff, gy * CELL);
 
-    // If we have walls to the left & right, the corridor is horizontal/west-east
-    if (hasLeftWall && hasRightWall) {
-        // No rotation needed for N/S span
-    } else if (hasTopWall && hasBotWall) {
-        // Walls are Top/Bottom, corridor is North/South. Rotate door to span East/West.
+    // Logic: Identify which axis the walls are on.
+    // If walls are at Top/Bottom, corridor is East/West. Door must span Z (North/South).
+    if (hasTopWall && hasBotWall) {
         d.rotation.y = Math.PI / 2;
+    } else if (hasLeftWall && hasRightWall) {
+        // Walls are Left/Right, corridor is North/South. Door spans X.
+        d.rotation.y = 0;
     } else {
-        // Fallback for tricky spots
-        if (hasLeftWall || hasRightWall) { /* keep default */ }
-        else d.rotation.y = Math.PI / 2;
+        // Corner or T-junction: prefer blocking the narrower path or default
+        if (hasTopWall || hasBotWall) d.rotation.y = Math.PI / 2;
     }
 
     d.userData = { type: 'door', id, color: col };
@@ -137,6 +141,12 @@ export function startLevel() {
     state.interactables = []; state.entities = []; state.collidables = []; state.enemies = [];
     state.lavaPatches = []; state.laserBeams = []; state.skyPortal = null; state.grenadeProjectiles = [];
     state.isFlying = false; state.launchPlate = null;
+
+    // Refresh Lights for safety
+    state.scene.children.filter(c => c.isLight).forEach(l => {
+        l.intensity = (l instanceof THREE.AmbientLight) ? 0.6 : 0.8;
+    });
+    
     state.inventory = []; state.discoveredItems = [];
     state.explored = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(false));
     
@@ -157,9 +167,14 @@ export function startLevel() {
         
         // Player starts outside maze on ground
         state.camera.position.set(-15, 2, -15);
-        state.camera.lookAt(0, 5, 0); 
+        state.camera.rotation.set(0, 0, 0); 
+        state.camera.lookAt(0, 2, 0); // Look at the floating maze base
     } else {
+        // Standard levels: Spawn inside and look toward center
+        const mazeCenter = (GRID_SIZE * CELL) / 2;
         state.camera.position.set(CELL, 2, CELL);
+        state.camera.rotation.set(0, 0, 0);
+        state.camera.lookAt(mazeCenter, 2, mazeCenter); 
     }
     const occupied = new Set(["1,1"]);
 
@@ -176,9 +191,26 @@ export function startLevel() {
         });
     }
 
-    // Place doors on mainPath so ordering is guaranteed: start → rDoor → bDoor → trophy
-    const rDoor = mainPath[Math.floor(mainPath.length * 0.35)];
-    const bDoor = mainPath[Math.floor(mainPath.length * 0.70)];
+    // Helper to find a "straight" corridor segment for better door bridging
+    const findStraightSegment = (path, targetIdx) => {
+        for (let offset = 0; offset < 5; offset++) {
+            for (let dir of [1, -1]) {
+                const idx = targetIdx + (offset * dir);
+                if (idx < 0 || idx >= path.length) continue;
+                const p = path[idx];
+                const hasLeftWall = p.x > 0 && state.mazeData[p.y][p.x - 1] === 1;
+                const hasRightWall = p.x < GRID_SIZE - 1 && state.mazeData[p.y][p.x + 1] === 1;
+                const hasTopWall = p.y > 0 && state.mazeData[p.y - 1][p.x] === 1;
+                const hasBotWall = p.y < GRID_SIZE - 1 && state.mazeData[p.y + 1][p.x] === 1;
+                if ((hasLeftWall && hasRightWall) || (hasTopWall && hasBotWall)) return p;
+            }
+        }
+        return path[targetIdx]; // Fallback if no straight segment found
+    };
+
+    // Place doors on straight corridor segments near 35% and 70% mark
+    const rDoor = findStraightSegment(mainPath, Math.floor(mainPath.length * 0.35));
+    const bDoor = findStraightSegment(mainPath, Math.floor(mainPath.length * 0.70));
     const trophy = mainPath[mainPath.length - 1];
     occupied.add(`${rDoor.x},${rDoor.y}`);
     occupied.add(`${bDoor.x},${bDoor.y}`);
@@ -227,7 +259,10 @@ export function startLevel() {
         color: new THREE.Color(`hsl(${wallHue}, 40%, 40%)`),
         map: tex.load('https://threejs.org/examples/textures/brick_diffuse.jpg')
     });
-    const floorMat = new THREE.MeshStandardMaterial({ map: tex.load('https://threejs.org/examples/textures/terrain/grasslight-big.jpg') });
+    const floorMat = new THREE.MeshStandardMaterial({ 
+        color: 0x228B22, // Fallback Green
+        map: tex.load('https://threejs.org/examples/textures/terrain/grasslight-big.jpg') 
+    });
 
     // Maze Floor & Walls
     for (let y = 0; y < GRID_SIZE; y++) {
@@ -324,6 +359,7 @@ export function startLevel() {
 
             const isHigh = Math.random() > 0.5;
             const wx = gx * CELL, wz = gy * CELL;
+            const posKey = `${gx},${gy}`;
 
             if (isHigh) {
                 // High laser fence (blocks jumps, but allows crouching under y=1.5)
@@ -346,6 +382,7 @@ export function startLevel() {
                 lb.add(glow);
                 state.scene.add(lb); state.entities.push(lb); state.laserBeams.push(lb);
             }
+            occupied.add(posKey);
             placed++;
         }
     }

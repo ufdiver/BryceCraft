@@ -77,13 +77,20 @@ window.addEventListener('keydown', e => {
         updateItemVisuals();
         updateHUD();
     }
+    
+    if (e.code === 'KeyF' && state.isAdmin && !state.isMathActive && !state.isDead) {
+        state.isFlying = !state.isFlying;
+        if (state.isFlying) {
+            const yOffset = state.currentLevel === 5 ? 5 : 0;
+            state.camera.position.y = yOffset + CELL + 3.0; // Place above maze
+            showMsg("ADMIN FLIGHT: ON");
+        } else {
+            showMsg("ADMIN FLIGHT: OFF");
+        }
+    }
 
     if (e.code === 'Space' && !state.isMathActive && !state.isDead) {
-        if (state.isFlying) {
-            state.isFlying = false;
-            state.jumpVelocity = -0.5;
-            showMsg("DROPPING!");
-        } else {
+        if (!state.isFlying) {
             const item = state.inventoryTypes[state.selectedItemIdx];
             if (item === 'hand') handleGrab();
             else if (item === 'gun') handleShoot();
