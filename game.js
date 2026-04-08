@@ -189,15 +189,20 @@ function animate() {
                 showMsg("FLYING! PRESS SPACE TO LAND");
             }
 
-            // Find the highest placed block directly underfoot to use as dynamic floor
+            // Find the highest placed block or maze floor directly underfoot to use as dynamic floor
             let floorY = 0;
             if (!state.isFlying && state.jumpVelocity <= 0) {
-                for (const block of state.collidables) {
-                    if (block.userData.type !== 'placed') continue;
-                    const blockTop = block.position.y + 0.5;
-                    if (Math.abs(state.camera.position.x - block.position.x) < 1.1 &&
-                        Math.abs(state.camera.position.z - block.position.z) < 1.1) {
-                        floorY = Math.max(floorY, blockTop);
+                // Check all entities for floor-like surfaces
+                for (const ent of state.entities) {
+                    if (ent.userData && (ent.userData.type === 'placed' || ent.userData.type === 'floor')) {
+                        const top = ent.userData.type === 'placed' ? ent.position.y + 0.5 : ent.userData.yTop;
+                        // Lenient check: if player is roughly at or above floor level, treat it as ground
+                        if (state.camera.position.y >= top - 0.5) {
+                            if (Math.abs(state.camera.position.x - ent.position.x) < CELL/2 + 0.5 &&
+                                Math.abs(state.camera.position.z - ent.position.z) < CELL/2 + 0.5) {
+                                floorY = Math.max(floorY, top);
+                            }
+                        }
                     }
                 }
             }
@@ -319,7 +324,9 @@ function animate() {
                 const dx = state.camera.position.x - state.waterBounds.center;
                 const dz = state.camera.position.z - state.waterBounds.center;
                 const dist = Math.sqrt(dx * dx + dz * dz);
-                if (dist > state.waterBounds.in && dist < state.waterBounds.out) {
+                // Also check if user is at the same elevation as the water
+                const atWaterLevel = Math.abs(state.camera.position.y - state.boatMesh.position.y) < 3.0;
+                if (dist > state.waterBounds.in && dist < state.waterBounds.out && atWaterLevel) {
                     state.lastHit = Date.now();
                     handleDeath("FELL IN THE MOAT! -1 LIFE");
                 }

@@ -72,6 +72,11 @@ window.addEventListener('keydown', e => {
 
     if (e.code === 'Tab' && !state.isMathActive && !state.isDead) handleCycleItem();
     if (e.code === 'KeyG' && !state.isMathActive && !state.isDead) handleCycleBlock();
+    if (e.code === 'Escape' && !state.isMathActive && !state.isDead) {
+        state.selectedItemIdx = 0;
+        updateItemVisuals();
+        updateHUD();
+    }
 
     if (e.code === 'Space' && !state.isMathActive && !state.isDead) {
         if (state.isFlying) {

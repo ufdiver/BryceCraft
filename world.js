@@ -39,14 +39,14 @@ export function getAccessibleCells(startX, startY, blockX, blockY) {
     return cells;
 }
 
-export function spawnKeyShop(gx, gy, id, col) {
+export function spawnKeyShop(gx, gy, id, col, yOff = 0) {
     const group = new THREE.Group();
     const mat = new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.4 });
     const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.7, 8), mat); stem.rotation.x = Math.PI / 2;
     const ring = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.04, 8, 16), mat); ring.position.z = 0.35;
     const bit = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.18, 0.06), mat); bit.position.set(0.08, 0, -0.28);
     group.add(stem, ring, bit);
-    group.position.set(gx * CELL, 1.5, gy * CELL);
+    group.position.set(gx * CELL, 1.5 + yOff, gy * CELL);
     group.userData = { type: 'shop', id, price: KEY_PRICE, color: col };
     const hitBox = new THREE.Mesh(new THREE.BoxGeometry(1.5, 3.0, 1.5), new THREE.MeshBasicMaterial({ visible: false }));
     hitBox.userData = group.userData; hitBox.userData.root = group;
@@ -54,13 +54,13 @@ export function spawnKeyShop(gx, gy, id, col) {
     state.scene.add(group); state.interactables.push(group); state.entities.push(group);
 }
 
-export function spawnBombShop(gx, gy) {
+export function spawnBombShop(gx, gy, yOff = 0) {
     const group = new THREE.Group();
     const bomb = new THREE.Mesh(new THREE.SphereGeometry(0.4, 16, 16), new THREE.MeshStandardMaterial({ color: 0x333333 }));
     const wick = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.2, 8), new THREE.MeshStandardMaterial({ color: 0x884422 }));
     wick.position.y = 0.45;
     group.add(bomb, wick);
-    group.position.set(gx * CELL, 1, gy * CELL);
+    group.position.set(gx * CELL, 1 + yOff, gy * CELL);
     group.userData = { type: 'shop', id: 'Bomb', price: BOMB_PRICE, color: 0x333333 };
     const hitBox = new THREE.Mesh(new THREE.BoxGeometry(1.5, 3.0, 1.5), new THREE.MeshBasicMaterial({ visible: false }));
     hitBox.userData = group.userData; hitBox.userData.root = group;
@@ -68,13 +68,13 @@ export function spawnBombShop(gx, gy) {
     state.scene.add(group); state.interactables.push(group); state.entities.push(group);
 }
 
-export function spawnGunShop(gx, gy) {
+export function spawnGunShop(gx, gy, yOff = 0) {
     const group = new THREE.Group();
     const body = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.3, 0.15), new THREE.MeshStandardMaterial({ color: 0x333333 }));
     const handle = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.4, 0.15), new THREE.MeshStandardMaterial({ color: 0x222222 }));
     handle.position.set(-0.15, -0.2, 0); handle.rotation.z = -0.2;
     group.add(body, handle);
-    group.position.set(gx * CELL, 1.2, gy * CELL);
+    group.position.set(gx * CELL, 1.2 + yOff, gy * CELL);
     group.userData = { type: 'shop', id: 'Pistol', price: GUN_PRICE, color: 0x555555 };
     const hitBox = new THREE.Mesh(new THREE.BoxGeometry(1.5, 3.0, 1.5), new THREE.MeshBasicMaterial({ visible: false }));
     hitBox.userData = group.userData; hitBox.userData.root = group;
@@ -82,7 +82,7 @@ export function spawnGunShop(gx, gy) {
     state.scene.add(group); state.interactables.push(group); state.entities.push(group);
 }
 
-export function spawnPelletShop(gx, gy) {
+export function spawnPelletShop(gx, gy, yOff = 0) {
     const group = new THREE.Group();
     const pellet = new THREE.Mesh(new THREE.SphereGeometry(0.3, 16, 16), new THREE.MeshStandardMaterial({ 
         color: 0xffff00, 
@@ -90,7 +90,7 @@ export function spawnPelletShop(gx, gy) {
         emissiveIntensity: 1.5 
     }));
     group.add(pellet);
-    group.position.set(gx * CELL, 1.2, gy * CELL);
+    group.position.set(gx * CELL, 1.2 + yOff, gy * CELL);
     group.userData = { type: 'shop', id: 'Pellet', price: PELLET_PRICE, color: 0xffff00 };
     const hitBox = new THREE.Mesh(new THREE.BoxGeometry(1.5, 3.0, 1.5), new THREE.MeshBasicMaterial({ visible: false }));
     hitBox.userData = group.userData; hitBox.userData.root = group;
@@ -98,7 +98,7 @@ export function spawnPelletShop(gx, gy) {
     state.scene.add(group); state.interactables.push(group); state.entities.push(group);
 }
 
-export function spawnDoor(gx, gy, id, col) {
+export function spawnDoor(gx, gy, id, col, yOff = 0) {
     // Check cross-neighbors to see where the walls are to bridge them
     const hasLeftWall = state.mazeData[gy][gx - 1] === 1;
     const hasRightWall = state.mazeData[gy][gx + 1] === 1;
@@ -106,7 +106,7 @@ export function spawnDoor(gx, gy, id, col) {
     const hasBotWall = state.mazeData[gy + 1][gx] === 1;
 
     const d = new THREE.Mesh(new THREE.BoxGeometry(CELL * 1.5, CELL, 0.4), new THREE.MeshStandardMaterial({ color: col, transparent: true, opacity: 0.6 }));
-    d.position.set(gx * CELL, CELL / 2, gy * CELL);
+    d.position.set(gx * CELL, (CELL / 2) + yOff, gy * CELL);
 
     // If we have walls to the left & right, the corridor is horizontal/west-east
     if (hasLeftWall && hasRightWall) {
@@ -139,8 +139,28 @@ export function startLevel() {
     state.isFlying = false; state.launchPlate = null;
     state.inventory = []; state.discoveredItems = [];
     state.explored = Array(GRID_SIZE).fill().map(() => Array(GRID_SIZE).fill(false));
-
+    
+    const yOffset = state.currentLevel === 5 ? 5 : 0;
     state.mazeData = generateMaze();
+    
+    // Level 5 Entrance - Open the outer wall so player can enter from sky
+    if (state.currentLevel === 5) state.mazeData[1][0] = 0;
+
+    // Level 5 Sky Ground
+    if (state.currentLevel === 5) {
+        const gGeo = new THREE.PlaneGeometry(1000, 1000);
+        const gMat = new THREE.MeshStandardMaterial({ color: 0x228B22 }); // Grass Green
+        const g = new THREE.Mesh(gGeo, gMat);
+        g.rotation.x = -Math.PI / 2;
+        g.position.y = 0;
+        state.scene.add(g); state.entities.push(g);
+        
+        // Player starts outside maze on ground
+        state.camera.position.set(-15, 2, -15);
+        state.camera.lookAt(0, 5, 0); 
+    } else {
+        state.camera.position.set(CELL, 2, CELL);
+    }
     const occupied = new Set(["1,1"]);
 
     // Critical Path Calculation
@@ -169,8 +189,8 @@ export function startLevel() {
     const zone2 = getAccessibleCells(rDoor.x, rDoor.y, bDoor.x, bDoor.y);
 
     // Spawns
-    spawnDoor(rDoor.x, rDoor.y, "Red Key", 0xff0000);
-    spawnDoor(bDoor.x, bDoor.y, "Blue Key", 0x0000ff);
+    spawnDoor(rDoor.x, rDoor.y, "Red Key", 0xff0000, yOffset);
+    spawnDoor(bDoor.x, bDoor.y, "Blue Key", 0x0000ff, yOffset);
 
     const getUnoccupied = (zone) => {
         const filtered = zone.filter(p => !occupied.has(`${p.x},${p.y}`));
@@ -179,24 +199,24 @@ export function startLevel() {
 
     if (zone1.length > 0) {
         const rk = getUnoccupied(zone1);
-        if (rk) { spawnKeyShop(rk.x, rk.y, "Red Key", 0xff0000); occupied.add(`${rk.x},${rk.y}`); }
+        if (rk) { spawnKeyShop(rk.x, rk.y, "Red Key", 0xff0000, yOffset); occupied.add(`${rk.x},${rk.y}`); }
         const bs1 = getUnoccupied(zone1);
-        if (bs1) { spawnBombShop(bs1.x, bs1.y); occupied.add(`${bs1.x},${bs1.y}`); }
+        if (bs1) { spawnBombShop(bs1.x, bs1.y, yOffset); occupied.add(`${bs1.x},${bs1.y}`); }
     }
     if (zone2.length > 0) {
         const bk = getUnoccupied(zone2);
-        if (bk) { spawnKeyShop(bk.x, bk.y, "Blue Key", 0x0000ff); occupied.add(`${bk.x},${bk.y}`); }
+        if (bk) { spawnKeyShop(bk.x, bk.y, "Blue Key", 0x0000ff, yOffset); occupied.add(`${bk.x},${bk.y}`); }
 
         // LEVEL 2+ EXCLUSIVE: PISTOL SHOP
         if (state.currentLevel >= 2) {
             const gunCell = getUnoccupied(zone2);
-            if (gunCell) { spawnGunShop(gunCell.x, gunCell.y); occupied.add(`${gunCell.x},${gunCell.y}`); }
+            if (gunCell) { spawnGunShop(gunCell.x, gunCell.y, yOffset); occupied.add(`${gunCell.x},${gunCell.y}`); }
         }
 
         // LEVEL 3+ EXCLUSIVE: PELLET SHOP
         if (state.currentLevel >= 3) {
             const pelletCell = getUnoccupied(zone2);
-            if (pelletCell) { spawnPelletShop(pelletCell.x, pelletCell.y); occupied.add(`${pelletCell.x},${pelletCell.y}`); }
+            if (pelletCell) { spawnPelletShop(pelletCell.x, pelletCell.y, yOffset); occupied.add(`${pelletCell.x},${pelletCell.y}`); }
         }
     }
 
@@ -212,13 +232,15 @@ export function startLevel() {
     // Maze Floor & Walls
     for (let y = 0; y < GRID_SIZE; y++) {
         for (let x = 0; x < GRID_SIZE; x++) {
-            const f = new THREE.Mesh(new THREE.PlaneGeometry(CELL, CELL), floorMat);
-            f.rotation.x = -Math.PI / 2; f.position.set(x * CELL, 0, y * CELL);
+            // Thick Platform Floor (instead of plane)
+            const f = new THREE.Mesh(new THREE.BoxGeometry(CELL, 0.4, CELL), floorMat);
+            f.position.set(x * CELL, yOffset - 0.2, y * CELL);
+            f.userData = { type: 'floor', yTop: yOffset };
             state.scene.add(f); state.entities.push(f);
 
             if (state.mazeData[y][x] === 1) {
                 const w = new THREE.Mesh(new THREE.BoxGeometry(CELL, CELL, CELL), wallMat);
-                w.position.set(x * CELL, CELL / 2, y * CELL);
+                w.position.set(x * CELL, (CELL / 2) + yOffset, y * CELL);
                 w.userData = { type: 'destructible' };
                 state.scene.add(w); state.collidables.push(w);
             }
@@ -261,7 +283,7 @@ export function startLevel() {
                 roughness: 0.9
             });
             const lava = new THREE.Mesh(new THREE.BoxGeometry(wSize, 0.06, hSize), lavaMat);
-            lava.position.set(wx, 0.04, wz);
+            lava.position.set(wx, 0.04 + yOffset, wz);
             lava.userData = { type: 'lava', cx: wx, cz: wz, hx: (wSize / 2) - 0.15, hz: (hSize / 2) - 0.15 };
             state.scene.add(lava);
             state.entities.push(lava);
@@ -308,8 +330,8 @@ export function startLevel() {
                 [1.5, 3.0, 4.5].forEach(yPos => {
                     const mat = new THREE.MeshBasicMaterial({ color: 0xff00ff, transparent: true, opacity: 0.8 });
                     const lb = new THREE.Mesh(new THREE.BoxGeometry(wSize, 0.1, hSize), mat);
-                    lb.position.set(wx, yPos, wz);
-                    lb.userData = { type: 'laser', cx: wx, cz: wz, cy: yPos, hx, hz };
+                    lb.position.set(wx, yPos + yOffset, wz);
+                    lb.userData = { type: 'laser', cx: wx, cz: wz, cy: yPos + yOffset, hx, hz };
                     const glow = new THREE.Mesh(new THREE.BoxGeometry(wSize * 1.1, 0.25, hSize * 1.1), new THREE.MeshBasicMaterial({ color: 0xff00ff, transparent: true, opacity: 0.4 }));
                     lb.add(glow);
                     state.scene.add(lb); state.entities.push(lb); state.laserBeams.push(lb);
@@ -318,8 +340,8 @@ export function startLevel() {
                 // Low laser (must jump over, y=0.5)
                 const mat = new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.8 });
                 const lb = new THREE.Mesh(new THREE.BoxGeometry(wSize, 0.1, hSize), mat);
-                lb.position.set(wx, 0.5, wz);
-                lb.userData = { type: 'laser', cx: wx, cz: wz, cy: 0.5, hx, hz };
+                lb.position.set(wx, 0.5 + yOffset, wz);
+                lb.userData = { type: 'laser', cx: wx, cz: wz, cy: 0.5 + yOffset, hx, hz };
                 const glow = new THREE.Mesh(new THREE.BoxGeometry(wSize * 1.1, 0.25, hSize * 1.1), new THREE.MeshBasicMaterial({ color: 0x00ffff, transparent: true, opacity: 0.4 }));
                 lb.add(glow);
                 state.scene.add(lb); state.entities.push(lb); state.laserBeams.push(lb);
@@ -362,11 +384,13 @@ export function startLevel() {
     const moatOut = moatIn + 20;
     state.waterBounds = { in: moatIn, out: moatOut, center: mazeCenter };
 
+    // Moat
     const waterMat = new THREE.MeshStandardMaterial({ color: 0x0044ff, transparent: true, opacity: 0.7 });
     const waterGeom = new THREE.RingGeometry(moatIn, moatOut, 64);
     const moat = new THREE.Mesh(waterGeom, waterMat);
     moat.rotation.x = -Math.PI / 2; moat.position.set(mazeCenter, 0.1, mazeCenter);
     state.scene.add(moat); state.entities.push(moat);
+    state.waterBounds = { center: mazeCenter, in: moatIn, out: moatOut };
 
     // Boat
     state.boatMesh = createBoat();
@@ -423,7 +447,7 @@ export function startLevel() {
             occupied.add(posKey);
             const diff = distToSpawn < 8 ? 1 : (distToSpawn < 15 ? 2 : 3);
             const npc = Math.random() > 0.4 ? createHumanNPC(diff) : createFoxNPC(diff);
-            npc.position.set(p.x * CELL, 0, p.y * CELL);
+            npc.position.set(p.x * CELL, yOffset, p.y * CELL);
             Object.assign(npc.userData, { type: 'math', difficulty: diff });
             state.scene.add(npc); state.interactables.push(npc); state.entities.push(npc);
         }
@@ -447,7 +471,7 @@ export function startLevel() {
             if (distToSpawn < 10 || occupied.has(posKey)) { i--; continue; }
             occupied.add(posKey);
             const enemy = Math.random() > 0.5 ? createSlimeEnemy() : createGhostEnemy();
-            enemy.position.set(p.x * CELL, 0, p.y * CELL);
+            enemy.position.set(p.x * CELL, yOffset, p.y * CELL);
             enemy.userData = { type: 'enemy', dir: new THREE.Vector3(1, 0, 0), speed: 0.04 + Math.random() * 0.04 };
             state.scene.add(enemy);
             state.enemies.push(enemy);
@@ -456,7 +480,7 @@ export function startLevel() {
     console.log("Level", state.currentLevel, "Enemies spawned:", state.enemies.length);
 
     const exit = new THREE.Mesh(new THREE.TorusKnotGeometry(0.4, 0.12), new THREE.MeshStandardMaterial({ color: 0xffd700 }));
-    exit.position.set(trophy.x * CELL, 1.5, trophy.y * CELL);
+    exit.position.set(trophy.x * CELL, 1.5 + yOffset, trophy.y * CELL);
     exit.userData = { type: 'exit', color: 0xffd700 };
     const hitBox = new THREE.Mesh(new THREE.BoxGeometry(1.5, 3, 1.5), new THREE.MeshBasicMaterial({ visible: false }));
     hitBox.userData = exit.userData; hitBox.userData.root = exit; exit.add(hitBox);

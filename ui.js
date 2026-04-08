@@ -14,7 +14,7 @@ export function updateHUD() {
     else if (item === 'bomb') available = state.bombs > 0;
     else if (item === 'pellet') available = state.invinciblePellets > 0;
     
-    document.getElementById('item-name').innerText = available ? item.toUpperCase() : "HAND (AUTO)";
+    document.getElementById('item-name').innerText = available ? item.toUpperCase() : "HAND";
 
     const gunHUD = document.getElementById('gun-hud');
     if (state.hasGun) {
