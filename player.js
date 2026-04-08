@@ -337,7 +337,7 @@ export function processLogic(obj) {
         if (state.gold >= d.price) {
             state.gold -= d.price; sfx.buy();
             if (d.id === 'Bomb') state.bombs++;
-            else if (d.id === 'Pistol') { state.hasGun = true; state.ammo += 5; }
+            else if (d.id === 'Pistol') { state.hasGun = true; state.ammo += 50; }
             else if (d.id === 'Pellet') { state.invinciblePellets++; }
             else state.inventory.push(d.id);
             const root = obj.userData.root || obj;
