@@ -290,6 +290,7 @@
         <h2 style="font-size: 50px; color: #ffff00; text-shadow: 4px 4px #000; margin-bottom: 30px;">HOW TO PLAY</h2>
         <div class="controls-list">
             <div class="control-item"><span>MOVE:</span> <span class="key-text">WASD / ARROW KEYS</span></div>
+            <div class="control-item"><span>SPRINT:</span> <span class="key-text">SHIFT KEY (hold)</span></div>
             <div class="control-item"><span>LOOK:</span> <span class="key-text">MOUSE MOVEMENT</span></div>
             <div class="control-item"><span>INTERACT/GRAB:</span> <span class="key-text">SPACE BAR</span></div>
             <div class="control-item"><span>USE BOMB:</span> <span class="key-text">B KEY</span></div>
@@ -301,6 +302,7 @@
             <div class="control-item"><span>PLACE BLOCK:</span> <span class="key-text">V KEY</span></div>
             <div class="control-item"><span>DESTROY BLOCK:</span> <span class="key-text">E KEY</span></div>
             <div class="control-item"><span>CYCLE BLOCK TYPE:</span> <span class="key-text">G KEY</span></div>
+            <div class="control-item"><span>USE PELLET:</span> <span class="key-text">P KEY</span></div>
             <div style="margin-top:20px; color:#ccc; font-size:16px; border-top:1px solid #666; padding-top:10px;">
                 Tip: Walk up to NPCs and animals to talk to them! <span onclick="showAdmin()" style="cursor:default" title="Secret Tester Access">Math</span> problems give Gold. Don't touch the enemies!
             </div>
@@ -328,6 +330,8 @@
                 id="keys-val">Empty</span></div>
         <div id="gun-hud" style="color:#00ffff; font-size: 13px; margin-top:3px; display:none;">Pistol: <span id="ammo-val">0</span> shots <span style="color:#fff; opacity:0.7;">(f)</span></div>
         <div id="grenade-hud" style="color:#ff8800; font-size: 13px; margin-top:3px; display:none;">Grenades: <span id="grenade-val">0</span> <span style="color:#fff; opacity:0.7;">(t)</span></div>
+        <div id="pellet-hud" style="color:#ffff00; font-size: 13px; margin-top:3px; display:none;">Shield Pellet: <span id="pellet-val">0</span> <span style="color:#fff; opacity:0.7;">(p)</span></div>
+        <div id="invincible-hud" style="color:#ffff00; font-weight: bold; font-size: 14px; margin-top:5px; display:none; animation: pulse 1s infinite;">&#9733; INVINCIBLE (<span id="inv-time">0</span>s)</div>
         <div id="crouch-hud" style="color:#aaffaa; font-size: 12px; margin-top:4px; display:none; letter-spacing:1px;">&#9660; CROUCHING</div>
     </div>
 
@@ -356,6 +360,7 @@
     </div>
 
     <div id="msg"></div>
+    <div id="shield-overlay" style="position:fixed; top:0; left:0; width:100%; height:100%; pointer-events:none; z-index:1000; box-shadow: inset 0 0 100px rgba(255, 255, 0, 0); transition: box-shadow 0.2s;"></div>
     <div id="death-overlay">
         <div id="death-text">Wasted</div>
     </div>

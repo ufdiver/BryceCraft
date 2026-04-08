@@ -16,8 +16,9 @@ const BLOCK_TYPES = [
 let selectedBlockIdx = 0;
 
 window.addEventListener('keydown', e => {
-    if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space", "KeyB", "KeyE", "KeyF", "KeyC", "KeyX", "KeyV", "KeyG", "KeyT"].includes(e.code)) e.preventDefault();
+    if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space", "KeyB", "KeyE", "KeyF", "KeyC", "KeyX", "KeyV", "KeyG", "KeyT", "ShiftLeft", "ShiftRight", "KeyP"].includes(e.code)) e.preventDefault();
     keysDown[e.code] = true;
+    if (e.code === 'KeyP' && !state.isMathActive && !state.isDead) handleUsePellet();
     if (e.code === 'Space' && !state.isMathActive) {
         if (state.isFlying) {
             state.isFlying = false;
@@ -165,7 +166,7 @@ export function handleBomb() {
 }
 
 export function handleDeath(msg = "TOUCHED ENEMY! -1 LIFE") {
-    if (state.isDead) return;
+    if (state.isDead || state.invincibleTime > 0) return;
     state.isDead = true; state.isPlayerOnBoat = false;
     state.lives--; updateHUD();
     showMsg(msg);
@@ -266,6 +267,7 @@ export function processLogic(obj) {
             state.gold -= d.price; sfx.buy();
             if (d.id === 'Bomb') state.bombs++;
             else if (d.id === 'Pistol') { state.hasGun = true; state.ammo += 5; }
+            else if (d.id === 'Pellet') { state.invinciblePellets++; }
             else state.inventory.push(d.id);
             const root = obj.userData.root || obj;
             state.scene.remove(root); state.interactables = state.interactables.filter(i => i !== root);
@@ -389,4 +391,14 @@ export function handleGrenade() {
     };
     state.scene.add(grenade);
     state.grenadeProjectiles.push(grenade);
+}
+
+export function handleUsePellet() {
+    if (state.invinciblePellets <= 0) { showMsg("NO PELLETS!"); return; }
+    if (state.invincibleTime > 0) { showMsg("ALREADY INVINCIBLE!"); return; }
+    state.invinciblePellets--;
+    state.invincibleTime = 15; // 15 seconds
+    sfx.levelUp(); // use level up sound as a "power up"
+    showMsg("INVINCIBILITY ACTIVATED!");
+    updateHUD();
 }

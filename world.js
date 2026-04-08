@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { state, GRID_SIZE, CELL, KEY_PRICE, BOMB_PRICE, GUN_PRICE } from './state.js';
+import { state, GRID_SIZE, CELL, KEY_PRICE, BOMB_PRICE, GUN_PRICE, PELLET_PRICE } from './state.js';
 import { createHumanNPC, createFerryman, createFoxNPC, createSlimeEnemy, createTree, createGhostEnemy, createBoat } from './entities.js';
 import { updateHUD, showMsg } from './ui.js';
 
@@ -76,6 +76,22 @@ export function spawnGunShop(gx, gy) {
     group.add(body, handle);
     group.position.set(gx * CELL, 1.2, gy * CELL);
     group.userData = { type: 'shop', id: 'Pistol', price: GUN_PRICE, color: 0x555555 };
+    const hitBox = new THREE.Mesh(new THREE.BoxGeometry(1.5, 3.0, 1.5), new THREE.MeshBasicMaterial({ visible: false }));
+    hitBox.userData = group.userData; hitBox.userData.root = group;
+    group.add(hitBox);
+    state.scene.add(group); state.interactables.push(group); state.entities.push(group);
+}
+
+export function spawnPelletShop(gx, gy) {
+    const group = new THREE.Group();
+    const pellet = new THREE.Mesh(new THREE.SphereGeometry(0.3, 16, 16), new THREE.MeshStandardMaterial({ 
+        color: 0xffff00, 
+        emissive: 0xffff00, 
+        emissiveIntensity: 1.5 
+    }));
+    group.add(pellet);
+    group.position.set(gx * CELL, 1.2, gy * CELL);
+    group.userData = { type: 'shop', id: 'Pellet', price: PELLET_PRICE, color: 0xffff00 };
     const hitBox = new THREE.Mesh(new THREE.BoxGeometry(1.5, 3.0, 1.5), new THREE.MeshBasicMaterial({ visible: false }));
     hitBox.userData = group.userData; hitBox.userData.root = group;
     group.add(hitBox);
@@ -175,6 +191,12 @@ export function startLevel() {
         if (state.currentLevel >= 2) {
             const gunCell = getUnoccupied(zone2);
             if (gunCell) { spawnGunShop(gunCell.x, gunCell.y); occupied.add(`${gunCell.x},${gunCell.y}`); }
+        }
+
+        // LEVEL 3+ EXCLUSIVE: PELLET SHOP
+        if (state.currentLevel >= 3) {
+            const pelletCell = getUnoccupied(zone2);
+            if (pelletCell) { spawnPelletShop(pelletCell.x, pelletCell.y); occupied.add(`${pelletCell.x},${pelletCell.y}`); }
         }
     }
 

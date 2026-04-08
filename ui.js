@@ -22,6 +22,22 @@ export function updateHUD() {
     } else {
         grenadeHUD.style.display = 'none';
     }
+
+    const pelletHUD = document.getElementById('pellet-hud');
+    if (state.invinciblePellets > 0) {
+        pelletHUD.style.display = 'block';
+        document.getElementById('pellet-val').innerText = state.invinciblePellets;
+    } else {
+        pelletHUD.style.display = 'none';
+    }
+
+    const invHUD = document.getElementById('invincible-hud');
+    if (state.invincibleTime > 0) {
+        invHUD.style.display = 'block';
+        document.getElementById('inv-time').innerText = Math.ceil(state.invincibleTime);
+    } else {
+        invHUD.style.display = 'none';
+    }
 }
 
 export function showMsg(t) {

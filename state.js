@@ -8,6 +8,8 @@ export const state = {
     hasGun: false,
     currentLevel: 1,
     inventory: [],
+    invincibleTime: 0,
+    invinciblePellets: 0,
 
     // Game flow
     isMathActive: false,
@@ -70,3 +72,4 @@ export const CELL = 4;
 export const KEY_PRICE = 150;
 export const BOMB_PRICE = 75;
 export const GUN_PRICE = 200;
+export const PELLET_PRICE = 100;

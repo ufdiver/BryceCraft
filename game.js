@@ -143,8 +143,39 @@ function animate() {
                 state.camera.position.y += (baseY - state.camera.position.y) * 0.15;
             }
 
+            // --- INVINCIBILITY EFFECT ---
+            if (state.invincibleTime > 0) {
+                state.invincibleTime -= 0.0166; // approx 60fps
+                if (state.invincibleTime <= 0) {
+                    state.invincibleTime = 0;
+                    showMsg("SHIELD EXPIRED!");
+                }
+                updateHUD();
+                const pulse = (Math.sin(Date.now() * 0.01) + 1) / 2;
+                state.handGroup.children.forEach(c => {
+                    if (c.material) {
+                        c.material.emissive.setHex(0xffff00);
+                        c.material.emissiveIntensity = 0.3 + pulse * 0.7;
+                    }
+                });
+                const overlay = document.getElementById('shield-overlay');
+                if (overlay) overlay.style.boxShadow = `inset 0 0 ${100 + pulse * 150}px rgba(255, 255, 0, ${0.1 + pulse * 0.3})`;
+            } else {
+                const overlay = document.getElementById('shield-overlay');
+                if (overlay) overlay.style.boxShadow = `inset 0 0 0px rgba(255, 255, 0, 0)`;
+                state.handGroup.children.forEach(c => {
+                    if (c.material && c.material.emissive) {
+                        c.material.emissive.setHex(0x000000);
+                        c.material.emissiveIntensity = 0;
+                    }
+                });
+            }
+
             if (!state.isPlayerOnBoat) {
-                const moveSpeed = state.isCrouching ? 0.07 : 0.13;
+                const isSprinting = (keysDown['ShiftLeft'] || keysDown['ShiftRight']) && !state.isCrouching;
+                const baseSpeed = state.isCrouching ? 0.07 : 0.13;
+                const moveSpeed = isSprinting ? baseSpeed * 2.0 : baseSpeed;
+
                 if (keysDown['ArrowUp'] || keysDown['KeyW']) state.camera.translateZ(-moveSpeed);
                 if (keysDown['ArrowDown'] || keysDown['KeyS']) state.camera.translateZ(moveSpeed);
                 if (keysDown['ArrowLeft'] || keysDown['KeyA']) state.camera.rotation.y += 0.045;
