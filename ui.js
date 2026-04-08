@@ -7,6 +7,15 @@ export function updateHUD() {
     document.getElementById('bomb-val').innerText = state.bombs;
     document.getElementById('keys-val').innerText = state.inventory.length ? state.inventory.join(", ") : "Empty";
 
+    const item = state.inventoryTypes[state.selectedItemIdx];
+    let available = true;
+    if (item === 'gun') available = state.hasGun && state.ammo > 0;
+    else if (item === 'grenade') available = state.grenades > 0;
+    else if (item === 'bomb') available = state.bombs > 0;
+    else if (item === 'pellet') available = state.invinciblePellets > 0;
+    
+    document.getElementById('item-name').innerText = available ? item.toUpperCase() : "HAND (AUTO)";
+
     const gunHUD = document.getElementById('gun-hud');
     if (state.hasGun) {
         gunHUD.style.display = 'block';

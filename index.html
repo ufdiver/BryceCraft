@@ -289,20 +289,12 @@
     <div id="how-to-screen">
         <h2 style="font-size: 50px; color: #ffff00; text-shadow: 4px 4px #000; margin-bottom: 30px;">HOW TO PLAY</h2>
         <div class="controls-list">
-            <div class="control-item"><span>MOVE:</span> <span class="key-text">WASD / ARROW KEYS</span></div>
-            <div class="control-item"><span>SPRINT:</span> <span class="key-text">SHIFT KEY (hold)</span></div>
-            <div class="control-item"><span>LOOK:</span> <span class="key-text">MOUSE MOVEMENT</span></div>
-            <div class="control-item"><span>INTERACT/GRAB:</span> <span class="key-text">SPACE BAR</span></div>
-            <div class="control-item"><span>USE BOMB:</span> <span class="key-text">B KEY</span></div>
-            <div class="control-item"><span>SHOOT (PISTOL):</span> <span class="key-text">F KEY</span></div>
-            <div class="control-item"><span>CROUCH / STAND:</span> <span class="key-text">C KEY (hold)</span></div>
+            <div class="control-item"><span>CYCLE ITEM:</span> <span class="key-text">TAB KEY</span></div>
+            <div class="control-item"><span>USE SELECTED:</span> <span class="key-text">SPACE BAR</span></div>
+            <div class="control-item"><span>CYCLE MATERIAL:</span> <span class="key-text">G KEY</span></div>
             <div class="control-item"><span>JUMP:</span> <span class="key-text">X KEY</span></div>
-            <div class="control-item"><span>TOGGLE MAP:</span> <span class="key-text">M KEY</span></div>
-            <div class="control-item"><span>THROW GRENADE:</span> <span class="key-text">T KEY</span></div>
-            <div class="control-item"><span>PLACE BLOCK:</span> <span class="key-text">V KEY</span></div>
-            <div class="control-item"><span>DESTROY BLOCK:</span> <span class="key-text">E KEY</span></div>
-            <div class="control-item"><span>CYCLE BLOCK TYPE:</span> <span class="key-text">G KEY</span></div>
-            <div class="control-item"><span>USE PELLET:</span> <span class="key-text">P KEY</span></div>
+            <div class="control-item"><span>CROUCH:</span> <span class="key-text">C KEY (hold)</span></div>
+            <div class="control-item"><span>MOVE / LOOK:</span> <span class="key-text">WASD / MOUSE</span></div>
             <div style="margin-top:20px; color:#ccc; font-size:16px; border-top:1px solid #666; padding-top:10px;">
                 Tip: Walk up to NPCs and animals to talk to them! <span onclick="showAdmin()" style="cursor:default" title="Secret Tester Access">Math</span> problems give Gold. Don't touch the enemies!
             </div>
@@ -323,6 +315,7 @@
 
     <div id="hud">
         <div style="color: #00ffcc; font-weight: bold; margin-bottom:5px;">LEVEL <span id="lvl-val">1</span></div>
+        <div style="color: #ffffff; background: #333; padding: 5px; margin-bottom: 5px; border: 1px solid #777; font-size: 14px; text-align: center;">ITEM: <span id="item-name" style="color: #ffff00; font-weight: bold;">HAND</span></div>
         <div class="stat-row" style="color:#ffd700"><span>GOLD:</span> <span id="gold-val">0</span></div>
         <div class="stat-row" style="color:#ff4444"><span>LIVES:</span> <span id="lives-val">3</span></div>
         <div class="stat-row" style="color:#ffaa00"><span>BOMBS:</span> <span id="bomb-val">0</span></div>

@@ -34,6 +34,80 @@ state.handGroup.visible = false;
 state.camera.add(state.handGroup);
 state.scene.add(state.camera);
 
+// --- ITEM MODELS ---
+state.itemModels = {};
+
+const metalMat = new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.8, roughness: 0.2 });
+const woodMat = new THREE.MeshStandardMaterial({ color: 0x8B4513, roughness: 0.8 });
+
+// Gun Model (Modern SMG with Holographic Sight)
+const gun = new THREE.Group();
+const receiver = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 1.2, 12), metalMat);
+receiver.rotation.x = Math.PI / 2;
+receiver.position.set(0, 0, -0.4);
+const scope = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.15, 0.3), metalMat);
+scope.position.set(0, 0.12, -0.2);
+const lens = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.12, 0.01), new THREE.MeshStandardMaterial({ color: 0x44ff44, transparent: true, opacity: 0.4, emissive: 0x44ff44, emissiveIntensity: 0.5 }));
+lens.position.set(0, 0.12, -0.355);
+const fSight = new THREE.Mesh(new THREE.TorusGeometry(0.04, 0.01, 8, 12), metalMat);
+fSight.position.set(0, 0.09, -0.85);
+const fGrip = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.04, 0.35, 8), metalMat);
+fGrip.position.set(0, -0.18, -0.6);
+gun.add(receiver, scope, lens, fSight, fGrip);
+state.itemModels.gun = gun;
+
+// Shovel Model (Flipped: Blade at the front)
+const shovel = new THREE.Group();
+const shHandle = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.0, 8), woodMat);
+const shBlade = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.02, 0.4), new THREE.MeshStandardMaterial({ color: 0xCCCCCC, metalness: 0.9, roughness: 0.1 }));
+shBlade.position.set(0, 0.5, 0); shBlade.rotation.x = Math.PI / 2; // Blade at top (front)
+const shTop = new THREE.Mesh(new THREE.TorusGeometry(0.1, 0.03, 8, 12, Math.PI), woodMat);
+shTop.position.set(0, -0.5, 0); // Handle at bottom (back)
+shTop.rotation.x = Math.PI;
+shovel.add(shHandle, shBlade, shTop);
+shovel.rotation.x = -Math.PI / 3;
+state.itemModels.shovel = shovel;
+
+// Pickaxe Model (Flipped: Head at the front)
+const pickaxe = new THREE.Group();
+const piHandle = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.0, 8), woodMat);
+const piHeadLeft = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.4, 8), metalMat);
+piHeadLeft.position.set(-0.2, 0.5, 0); piHeadLeft.rotation.z = Math.PI / 2;
+const piHeadRight = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.4, 8), metalMat);
+piHeadRight.position.set(0.2, 0.5, 0); piHeadRight.rotation.z = -Math.PI / 2;
+pickaxe.add(piHandle, piHeadLeft, piHeadRight);
+pickaxe.rotation.x = -Math.PI / 3;
+state.itemModels.pickaxe = pickaxe;
+
+// Grenade Model (held in hand)
+const grenade = new THREE.Group();
+const gBody = new THREE.Mesh(new THREE.SphereGeometry(0.18, 12, 12), new THREE.MeshStandardMaterial({ color: 0x2d4a1e }));
+grenade.add(gBody);
+state.itemModels.grenade = grenade;
+
+// Bomb Model (held in hand)
+const bomb = new THREE.Group();
+const bBody = new THREE.Mesh(new THREE.SphereGeometry(0.25, 12, 12), new THREE.MeshStandardMaterial({ color: 0x111111 }));
+bomb.add(bBody);
+state.itemModels.bomb = bomb;
+
+// Pellet Model (held in hand)
+const pellet = new THREE.Group();
+const pBody = new THREE.Mesh(new THREE.SphereGeometry(0.15, 12, 12), new THREE.MeshStandardMaterial({ color: 0xffff00, emissive: 0xffff00, emissiveIntensity: 1 }));
+pellet.add(pBody);
+state.itemModels.pellet = pellet;
+
+// Add all to camera and position them
+Object.keys(state.itemModels).forEach(key => {
+    if (key === 'gun') {
+        state.itemModels[key].position.set(0.1, -0.22, -0.4); // More centered ADS-style position
+    } else {
+        state.itemModels[key].position.set(0.5, -0.5, -1.0);
+    }
+    state.itemModels[key].visible = false;
+    state.camera.add(state.itemModels[key]);
+});
+
 // --- WINDOW GLOBALS (called from HTML onclick attributes) ---
 window.toggleMap = toggleMap;
 window.showHowTo = showHowTo;
@@ -169,6 +243,24 @@ function animate() {
                         c.material.emissiveIntensity = 0;
                     }
                 });
+            }
+
+            // --- ITEM SWING ANIMATION ---
+            const currentItem = state.inventoryTypes[state.selectedItemIdx];
+            if (state.itemSwingTime > 0) {
+                state.itemSwingTime -= 0.08;
+                const progress = 1.0 - state.itemSwingTime;
+                const swingAngle = Math.sin(progress * Math.PI) * 1.2;
+                if (state.itemModels[currentItem]) {
+                    const baseRot = currentItem === 'gun' ? 0 : -Math.PI / 3;
+                    state.itemModels[currentItem].rotation.x = baseRot - swingAngle;
+                }
+            } else {
+                state.itemSwingTime = 0;
+                if (state.itemModels[currentItem]) {
+                    const baseRot = currentItem === 'gun' ? 0 : -Math.PI / 3;
+                    state.itemModels[currentItem].rotation.x = baseRot;
+                }
             }
 
             if (!state.isPlayerOnBoat) {

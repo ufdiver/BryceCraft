@@ -6,34 +6,90 @@ import { startLevel } from './world.js';
 
 export const keysDown = {};
 
+function createBlockTexture(baseColor, type) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 128; canvas.height = 128;
+    const ctx = canvas.getContext('2d');
+    const colorStr = '#' + baseColor.toString(16).padStart(6, '0');
+    
+    // Fill background
+    ctx.fillStyle = colorStr;
+    ctx.fillRect(0, 0, 128, 128);
+
+    // Apply patterns
+    ctx.globalAlpha = 0.3;
+    if (type === 'Dirt') {
+        for (let i = 0; i < 200; i++) {
+            ctx.fillStyle = Math.random() > 0.5 ? '#000' : '#fff';
+            ctx.fillRect(Math.random() * 128, Math.random() * 128, 4 + Math.random() * 8, 4 + Math.random() * 8);
+        }
+    } else if (type === 'Rock') {
+        ctx.strokeStyle = '#333'; ctx.lineWidth = 2;
+        for (let i = 0; i < 15; i++) {
+            ctx.beginPath();
+            ctx.moveTo(Math.random() * 128, Math.random() * 128);
+            ctx.lineTo(Math.random() * 128, Math.random() * 128);
+            ctx.stroke();
+        }
+    } else if (type === 'Wood') {
+        ctx.fillStyle = '#000';
+        for (let i = 0; i < 128; i += 16) {
+            ctx.fillRect(0, i, 128, 2);
+            for (let j = 0; j < 5; j++) {
+                ctx.globalAlpha = 0.1;
+                ctx.fillRect(Math.random() * 128, i, Math.random() * 64, 16);
+            }
+        }
+    } else if (type === 'Grass') {
+        ctx.fillStyle = '#2E7D32';
+        for (let i = 0; i < 500; i++) {
+            ctx.fillRect(Math.random() * 128, Math.random() * 128, 2, 8);
+        }
+    } else if (type === 'Metal') {
+        ctx.strokeStyle = '#fff'; ctx.globalAlpha = 0.5; ctx.lineWidth = 4;
+        ctx.strokeRect(5, 5, 118, 118);
+        ctx.fillStyle = '#fff';
+        [10, 118].forEach(x => [10, 118].forEach(y => ctx.fillRect(x-4, y-4, 8, 8)));
+    }
+    
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    return tex;
+}
+
 const BLOCK_TYPES = [
-    { name: 'Dirt',  color: 0x8B5E3C },
-    { name: 'Rock',  color: 0x787878 },
-    { name: 'Wood',  color: 0x6B3A2A },
-    { name: 'Grass', color: 0x4CAF50 },
-    { name: 'Metal', color: 0x90A4AE },
+    { name: 'Dirt',  color: 0x8B5E3C, map: createBlockTexture(0x8B5E3C, 'Dirt') },
+    { name: 'Rock',  color: 0x787878, map: createBlockTexture(0x787878, 'Rock') },
+    { name: 'Wood',  color: 0x6B3A2A, map: createBlockTexture(0x6B3A2A, 'Wood') },
+    { name: 'Grass', color: 0x4CAF50, map: createBlockTexture(0x4CAF50, 'Grass') },
+    { name: 'Metal', color: 0x90A4AE, map: createBlockTexture(0x90A4AE, 'Metal') },
 ];
 let selectedBlockIdx = 0;
 
 window.addEventListener('keydown', e => {
-    if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space", "KeyB", "KeyE", "KeyF", "KeyC", "KeyX", "KeyV", "KeyG", "KeyT", "ShiftLeft", "ShiftRight", "KeyP"].includes(e.code)) e.preventDefault();
+    if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space", "KeyB", "KeyE", "KeyF", "KeyC", "KeyX", "KeyV", "KeyG", "KeyT", "ShiftLeft", "ShiftRight", "KeyP", "Tab"].includes(e.code)) e.preventDefault();
     keysDown[e.code] = true;
-    if (e.code === 'KeyP' && !state.isMathActive && !state.isDead) handleUsePellet();
-    if (e.code === 'Space' && !state.isMathActive) {
+
+    if (e.code === 'Tab' && !state.isMathActive && !state.isDead) handleCycleItem();
+    if (e.code === 'KeyG' && !state.isMathActive && !state.isDead) handleCycleBlock();
+
+    if (e.code === 'Space' && !state.isMathActive && !state.isDead) {
         if (state.isFlying) {
             state.isFlying = false;
             state.jumpVelocity = -0.5;
             showMsg("DROPPING!");
         } else {
-            handleGrab();
+            const item = state.inventoryTypes[state.selectedItemIdx];
+            if (item === 'hand') handleGrab();
+            else if (item === 'gun') handleShoot();
+            else if (item === 'shovel') handlePlace();
+            else if (item === 'pickaxe') handleDestroy();
+            else if (item === 'grenade') handleGrenade();
+            else if (item === 'bomb') handleBomb();
+            else if (item === 'pellet') handleUsePellet();
         }
     }
-    if (e.code === 'KeyB' && !state.isMathActive) handleBomb();
-    if (e.code === 'KeyF' && !state.isMathActive) handleShoot();
-    if (e.code === 'KeyT' && !state.isMathActive) handleGrenade();
-    if (e.code === 'KeyV' && !state.isMathActive && !state.isDead) handlePlace();
-    if (e.code === 'KeyG' && !state.isMathActive && !state.isDead) handleCycleBlock();
-    if (e.code === 'KeyE' && !state.isMathActive && !state.isDead) handleDestroy();
+
     if (e.code === 'KeyX' && !state.isMathActive && !state.isDead && state.jumpVelocity === 0 && !state.isCrouching && !state.isFlying) {
         if (state.launchPlate) {
             const lp = state.launchPlate;
@@ -53,6 +109,8 @@ export function handleShoot() {
         return;
     }
     state.ammo--; sfx.shoot(); updateHUD();
+    updateItemVisuals();
+    state.itemSwingTime = 0.3; // recoil kick
 
     // --- MUZZLE FLASH ---
     const flash = new THREE.PointLight(0xff8800, 6, 8);
@@ -154,6 +212,7 @@ export function handleBomb() {
         const wall = hits[0].object;
         if (wall.userData.type === 'destructible') {
             state.bombs--; updateHUD();
+            updateItemVisuals();
             const b = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.5), new THREE.MeshBasicMaterial({ color: 0xff0000 }));
             b.position.copy(hits[0].point); state.scene.add(b);
             setTimeout(() => {
@@ -290,6 +349,7 @@ export function processLogic(obj) {
 }
 
 export function handlePlace() {
+    state.itemSwingTime = 1.0;
     const BLOCK = 1.0; // Minecraft-scale block size
 
     const dir = new THREE.Vector3();
@@ -321,8 +381,8 @@ export function handlePlace() {
     }
     const by = stackTop + BLOCK / 2;
 
-    const { color, name } = BLOCK_TYPES[selectedBlockIdx];
-    const mat = new THREE.MeshStandardMaterial({ color });
+    const { color, name, map } = BLOCK_TYPES[selectedBlockIdx];
+    const mat = new THREE.MeshStandardMaterial({ color, map });
     const block = new THREE.Mesh(new THREE.BoxGeometry(BLOCK, BLOCK, BLOCK), mat);
     block.position.set(bx, by, bz);
     block.userData = { type: 'placed' };
@@ -338,6 +398,7 @@ export function handleCycleBlock() {
 }
 
 export function handleDestroy() {
+    state.itemSwingTime = 1.0;
     const ray = new THREE.Raycaster();
     ray.setFromCamera(new THREE.Vector2(0, 0), state.camera);
 
@@ -372,6 +433,7 @@ export function handleGrenade() {
     if (state.grenades <= 0) { showMsg("NO GRENADES!"); return; }
     state.grenades--;
     updateHUD();
+    updateItemVisuals();
     sfx.shoot();
 
     const dir = new THREE.Vector3();
@@ -400,5 +462,48 @@ export function handleUsePellet() {
     state.invincibleTime = 15; // 15 seconds
     sfx.levelUp(); // use level up sound as a "power up"
     showMsg("INVINCIBILITY ACTIVATED!");
+    updateHUD();
+    updateItemVisuals();
+}
+
+export function handleCycleItem() {
+    state.selectedItemIdx = (state.selectedItemIdx + 1) % state.inventoryTypes.length;
+    updateItemVisuals();
+}
+
+export function updateItemVisuals() {
+    const item = state.inventoryTypes[state.selectedItemIdx];
+    
+    // Check availability
+    let actualItem = item;
+    let available = true;
+    if (item === 'gun') available = state.hasGun && state.ammo > 0;
+    else if (item === 'grenade') available = state.grenades > 0;
+    else if (item === 'bomb') available = state.bombs > 0;
+    else if (item === 'pellet') available = state.invinciblePellets > 0;
+    
+    if (!available) actualItem = 'hand';
+    
+    // Hide all hand meshes first, then show if needed
+    state.handGroup.visible = (actualItem === 'hand' || actualItem === 'grenade' || actualItem === 'bomb' || actualItem === 'pellet');
+    
+    // Position hand based on whether it's holding something small
+    if (actualItem === 'hand') state.handGroup.position.set(0.6, -0.6, -1.2);
+    else state.handGroup.position.set(0.5, -0.6, -1.0); 
+
+    Object.keys(state.itemModels).forEach(k => {
+        state.itemModels[k].visible = (k === actualItem);
+    });
+    
+    const displayNames = {
+        hand: "HAND (INTERACT)",
+        gun: "PISTOL",
+        shovel: "SHOVEL (BUILD)",
+        pickaxe: "PICKAXE (DESTROY)",
+        grenade: "GRENADE",
+        bomb: "BOMB",
+        pellet: "SHIELD PELLET"
+    };
+    showMsg(`SELECTED: ${displayNames[actualItem] || actualItem.toUpperCase()}`);
     updateHUD();
 }

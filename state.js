@@ -10,6 +10,9 @@ export const state = {
     inventory: [],
     invincibleTime: 0,
     invinciblePellets: 0,
+    selectedItemIdx: 0,
+    inventoryTypes: ['hand', 'gun', 'shovel', 'pickaxe', 'grenade', 'bomb', 'pellet'],
+    itemSwingTime: 0,
 
     // Game flow
     isMathActive: false,
