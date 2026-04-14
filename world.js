@@ -567,4 +567,21 @@ export function startLevel() {
 
     updateHUD();
     showMsg("LEVEL " + state.currentLevel + ": FIND GOLD FOR RED KEY");
+
+    // --- CLOUDS ---
+    state.clouds = [];
+    const cloudMat = new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.8 });
+    for (let i = 0; i < 20; i++) {
+        const cloud = new THREE.Group();
+        const blocks = Math.floor(Math.random() * 5) + 3;
+        for (let j = 0; j < blocks; j++) {
+            const b = new THREE.Mesh(new THREE.BoxGeometry(4 + Math.random() * 4, 1.5 + Math.random() * 1.5, 4 + Math.random() * 4), cloudMat);
+            b.position.set(j * 3.5, Math.random() * 2, Math.random() * 3.5);
+            cloud.add(b);
+        }
+        cloud.position.set(Math.random() * 800 - 400, 60 + Math.random() * 40, Math.random() * 800 - 400);
+        cloud.userData = { speed: 0.04 + Math.random() * 0.08 };
+        state.scene.add(cloud);
+        state.clouds.push(cloud);
+    }
 }

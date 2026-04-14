@@ -33,6 +33,11 @@ class AmbientLoop {
 }
 
 export const ambient = {
+    wind: new AmbientLoop(l => {
+        const src = audioCtx.createBufferSource(); src.buffer = noiseBuffer; src.loop = true;
+        const flt = audioCtx.createBiquadFilter(); flt.type = 'lowpass'; flt.frequency.value = 500;
+        src.connect(flt); flt.connect(l.gain); src.start();
+    }),
     lava: new AmbientLoop(l => {
         const src = audioCtx.createBufferSource(); src.buffer = noiseBuffer; src.loop = true;
         const flt = audioCtx.createBiquadFilter(); flt.type = 'lowpass'; flt.frequency.value = 150;

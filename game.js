@@ -191,7 +191,15 @@ function animate() {
             }
 
             // Find the highest placed block or maze floor directly underfoot to use as dynamic floor
-            let floorY = 0;
+            const worldMax = 150;
+            const mazeCenter = (GRID_SIZE * CELL) / 2 - (CELL / 2);
+            const distFromCenter = Math.max(
+                Math.abs(state.camera.position.x - mazeCenter),
+                Math.abs(state.camera.position.z - mazeCenter)
+            );
+            const isOnMap = distFromCenter <= worldMax + 5;
+            
+            let floorY = isOnMap ? 0 : -500; // Default to abyss if off map
             if (!state.isFlying && state.jumpVelocity <= 0) {
                 // Check all entities for floor-like surfaces
                 for (const ent of state.entities) {
@@ -655,6 +663,51 @@ function animate() {
     ambient.lava.setVol(Math.max(0, Math.min(0.2, 0.6 - lavaDist / 12)));
     ambient.laser.setVol(Math.max(0, Math.min(0.15, 0.5 - laserDist / 10)));
     ambient.water.setVol(Math.max(0, Math.min(0.15, 0.4 - waterDist / 15)));
+    
+    // --- ABYSS FALL CHECK ---
+    const worldMax = 150; // Half of world size 300
+    const mazeCenter = (GRID_SIZE * CELL) / 2 - (CELL / 2);
+    const distFromCenter = Math.max(
+        Math.abs(state.camera.position.x - mazeCenter),
+        Math.abs(state.camera.position.z - mazeCenter)
+    );
+    const isBeyondEdge = distFromCenter > worldMax + 5;
+    
+    // If we fly or walk off the edge, we lose flight and start the fall
+    if (isBeyondEdge && !state.isFallingOffMap && !state.isPlayerOnBoat) {
+        if (state.isFlying) {
+            state.isFlying = false;
+            showMsg("FLIGHT STALLED! THE ABYSS CONSUMES YOU!");
+        }
+        if (state.camera.position.y < -2) {
+            state.isFallingOffMap = true;
+            state.lastFallTime = Date.now();
+        }
+    }
 
+    if (state.isFallingOffMap) {
+        const elapsed = (Date.now() - state.lastFallTime) / 1000;
+        state.camera.position.y -= elapsed * 1.5; // Gain speed
+        if (ambient.wind) ambient.wind.setVol(Math.min(0.6, elapsed * 0.15));
+        
+        if (elapsed > 5.0) {
+            state.isFallingOffMap = false;
+            if (ambient.wind) ambient.wind.setVol(0);
+            state.scene.background = new THREE.Color(0xff0000); // Lava floor
+            handleDeath("FELL INTO THE LAVA DEPTHS!");
+            setTimeout(() => { state.scene.background = new THREE.Color(0x87CEEB); }, 2000);
+        }
+    } else {
+        if (ambient.wind) ambient.wind.setVol(0);
+    }
+    
     state.renderer.render(state.scene, state.camera);
+
+    // --- ANIMATE CLOUDS ---
+    if (state.clouds) {
+        state.clouds.forEach(c => {
+            c.position.x += c.userData.speed;
+            if (c.position.x > 450) c.position.x = -450;
+        });
+    }
 }

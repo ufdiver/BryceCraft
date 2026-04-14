@@ -23,6 +23,7 @@ export const state = {
     startRotation: 0,
     currentMentorObj: null,
     isSafeStart: true,
+    isFallingOffMap: false,
 
     // Physics
     isCrouching: false,
@@ -57,6 +58,7 @@ export const state = {
     grenadeProjectiles: [],
     lavaPatches: [],
     laserBeams: [],
+    clouds: [],
 
     // Hand mesh parts (populated in game.js)
     handGroup: null,
