@@ -22,6 +22,7 @@ export const state = {
     isGameStarted: false,
     startRotation: 0,
     currentMentorObj: null,
+    isSafeStart: true,
 
     // Physics
     isCrouching: false,

@@ -263,6 +263,7 @@ export function handleDeath(msg = "TOUCHED ENEMY! -1 LIFE") {
             state.camera.position.set(CELL, 2, CELL);
             state.camera.rotation.set(0, state.startRotation + Math.PI, 0);
             state.isDead = false;
+            state.isSafeStart = true;
             overlay.style.opacity = 0;
             overlay.style.background = 'rgba(180, 0, 0, 0)';
             txt.style.transform = 'scale(0.5)';

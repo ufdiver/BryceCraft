@@ -389,8 +389,8 @@ export function startLevel() {
         }
     }
 
-    // --- LAUNCH PLATE (level 3 only) ---
-    if (state.currentLevel === 3) {
+    // --- LAUNCH PLATE (level 3 and 4) ---
+    if (state.currentLevel === 3 || state.currentLevel === 4) {
         const shuffled = [...state.corridorCells].sort(() => Math.random() - 0.5);
         let plateCell = null;
         for (const cell of shuffled) {

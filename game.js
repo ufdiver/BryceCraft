@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { state, STAND_HEIGHT, CROUCH_HEIGHT, GRAVITY, CELL, GRID_SIZE } from './state.js';
-import { sfx, audioCtx } from './audio.js';
+import { sfx, audioCtx, ambient } from './audio.js';
 import { updateHUD, showMsg, toggleMap, showHowTo, hideHowTo, showAdmin, hideAdmin } from './ui.js';
 import { startLevel } from './world.js';
 import { keysDown, handleDeath, spawnBulletHole } from './player.js';
@@ -276,8 +276,14 @@ function animate() {
                 const baseSpeed = state.isCrouching ? 0.07 : 0.13;
                 const moveSpeed = isSprinting ? baseSpeed * 2.0 : baseSpeed;
 
+                if (keysDown['ArrowUp'] || keysDown['KeyW'] || keysDown['ArrowDown'] || keysDown['KeyS']) {
+                    if (state.isSafeStart) { state.isSafeStart = false; state.invincibleTime = 3.0; }
+                }
                 if (keysDown['ArrowUp'] || keysDown['KeyW']) state.camera.translateZ(-moveSpeed);
                 if (keysDown['ArrowDown'] || keysDown['KeyS']) state.camera.translateZ(moveSpeed);
+                if (keysDown['ArrowLeft'] || keysDown['KeyA'] || keysDown['ArrowRight'] || keysDown['KeyD']) {
+                    if (state.isSafeStart) { state.isSafeStart = false; state.invincibleTime = 3.0; }
+                }
                 if (keysDown['ArrowLeft'] || keysDown['KeyA']) state.camera.rotation.y += 0.045;
                 if (keysDown['ArrowRight'] || keysDown['KeyD']) state.camera.rotation.y -= 0.045;
             }
@@ -300,7 +306,7 @@ function animate() {
                 const ePos = new THREE.Vector2(en.position.x, en.position.z);
                 const distXZ = pPos.distanceTo(ePos);
 
-                if (!state.isFlying && Date.now() - state.lastHit > 1000 && (distXZ < 1.8 || playerBB.intersectsBox(enBB))) {
+                if (!state.isFlying && !state.isSafeStart && Date.now() - state.lastHit > 1000 && (distXZ < 1.8 || playerBB.intersectsBox(enBB))) {
                     state.lastHit = Date.now();
                     handleDeath("TOUCHED ENEMY! -1 LIFE");
                 }
@@ -629,6 +635,26 @@ function animate() {
         crosshair.style.boxShadow = targetAcquired ? '0 0 15px #ff0000' : 'none';
         crosshair.style.transform = targetAcquired ? 'translate(-50%, -50%) scale(1.4)' : 'translate(-50%, -50%) scale(1)';
     }
+
+    // --- AMBIENT AUDIO PROXIMITY ---
+    let lavaDist = 50, laserDist = 50, waterDist = 50;
+    state.lavaPatches.forEach(lp => {
+        const d = state.camera.position.distanceTo(new THREE.Vector3(lp.userData.cx, lp.userData.cy || 0, lp.userData.cz));
+        if (d < lavaDist) lavaDist = d;
+    });
+    state.laserBeams.forEach(lb => {
+        const d = state.camera.position.distanceTo(new THREE.Vector3(lb.userData.cx, lb.userData.cy || 0, lb.userData.cz));
+        if (d < laserDist) laserDist = d;
+    });
+    if (state.waterBounds) {
+        const dx = state.camera.position.x - state.waterBounds.center;
+        const dz = state.camera.position.z - state.waterBounds.center;
+        const d = Math.abs(Math.sqrt(dx*dx + dz*dz) - (state.waterBounds.in + state.waterBounds.out)/2);
+        if (d < waterDist) waterDist = d;
+    }
+    ambient.lava.setVol(Math.max(0, Math.min(0.2, 0.6 - lavaDist / 12)));
+    ambient.laser.setVol(Math.max(0, Math.min(0.15, 0.5 - laserDist / 10)));
+    ambient.water.setVol(Math.max(0, Math.min(0.15, 0.4 - waterDist / 15)));
 
     state.renderer.render(state.scene, state.camera);
 }
