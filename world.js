@@ -335,10 +335,13 @@ export function startLevel() {
             attempts++;
             const gx = Math.floor(Math.random() * (GRID_SIZE - 2)) + 1;
             const gy = Math.floor(Math.random() * (GRID_SIZE - 2)) + 1;
+            const posKey = `${gx},${gy}`;
+            
             if (state.mazeData[gy][gx] !== 0) continue;
             if (Math.abs(gx - 1) + Math.abs(gy - 1) < 4) continue;
 
-            // Don't place on top of lava
+            // Don't place on top of lava or existing traps/lasers
+            if (occupied.has(posKey)) continue;
             if (state.lavaPatches.some(lp => lp.userData.cx === gx * CELL && lp.userData.cz === gy * CELL)) continue;
 
             const wL = state.mazeData[gy][gx - 1] === 1;
@@ -359,7 +362,6 @@ export function startLevel() {
 
             const isHigh = Math.random() > 0.5;
             const wx = gx * CELL, wz = gy * CELL;
-            const posKey = `${gx},${gy}`;
 
             if (isHigh) {
                 // High laser fence (blocks jumps, but allows crouching under y=1.5)

@@ -211,8 +211,8 @@ function animate() {
 
             // Jump physics — override Y lerp while airborne; skip entirely while flying
             if (state.isFlying) {
-                // Flying vertical movement: Space=Up, C=Down
-                if (keysDown['Space']) state.camera.position.y += 0.15;
+                // Flying vertical movement: X=Up, C=Down
+                if (keysDown['KeyX']) state.camera.position.y += 0.15;
                 if (keysDown['KeyC']) state.camera.position.y -= 0.15;
             } else if (state.jumpVelocity !== 0) {
                 state.camera.position.y += state.jumpVelocity;
@@ -585,6 +585,49 @@ function animate() {
         }
 
         if (remove) { state.scene.remove(b); state.bullets.splice(i, 1); }
+    }
+
+    // --- CROSSHAIR TARGETING (Matches Bullet Logic) ---
+    const crosshair = document.getElementById('crosshair');
+    if (crosshair) {
+        let targetAcquired = false;
+        const isGun = state.inventoryTypes[state.selectedItemIdx] === 'gun';
+        
+        if (isGun && state.enemies.length > 0) {
+            const ray = new THREE.Ray();
+            ray.origin.copy(state.camera.position);
+            state.camera.getWorldDirection(ray.direction);
+            
+            let nearestDist = 40;
+            
+            // Check Walls first for blockage
+            for (const w of state.collidables) {
+                const wBox = new THREE.Box3().setFromObject(w);
+                const wallHit = ray.intersectBox(wBox, new THREE.Vector3());
+                if (wallHit) {
+                    const d = state.camera.position.distanceTo(wallHit);
+                    if (d < nearestDist) nearestDist = d;
+                }
+            }
+            
+            // Check Enemies if they are closer than any wall
+            for (const en of state.enemies) {
+                const eCenter = new THREE.Vector3(en.position.x, en.position.y + 1.2, en.position.z);
+                const eBox = new THREE.Box3().setFromCenterAndSize(eCenter, new THREE.Vector3(1.8, 2.8, 1.8));
+                const enemyHit = ray.intersectBox(eBox, new THREE.Vector3());
+                if (enemyHit) {
+                    const d = state.camera.position.distanceTo(enemyHit);
+                    if (d < nearestDist) {
+                        targetAcquired = true;
+                        break;
+                    }
+                }
+            }
+        }
+        crosshair.style.borderColor = targetAcquired ? '#ff0000' : '#ffffff';
+        crosshair.style.backgroundColor = targetAcquired ? 'rgba(255, 0, 0, 0.4)' : 'transparent';
+        crosshair.style.boxShadow = targetAcquired ? '0 0 15px #ff0000' : 'none';
+        crosshair.style.transform = targetAcquired ? 'translate(-50%, -50%) scale(1.4)' : 'translate(-50%, -50%) scale(1)';
     }
 
     state.renderer.render(state.scene, state.camera);

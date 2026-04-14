@@ -90,7 +90,11 @@ window.addEventListener('keydown', e => {
     }
 
     if (e.code === 'Space' && !state.isMathActive && !state.isDead) {
-        if (!state.isFlying) {
+        if (state.isFlying) {
+            state.isFlying = false;
+            state.jumpVelocity = -0.5;
+            showMsg("DROPPING!");
+        } else {
             const item = state.inventoryTypes[state.selectedItemIdx];
             if (item === 'hand') handleGrab();
             else if (item === 'gun') handleShoot();
@@ -457,9 +461,9 @@ export function handleGrenade() {
     grenade.position.copy(state.camera.position).addScaledVector(dir, 1.2);
     grenade.position.y -= 0.3;
     grenade.userData = {
-        dir: new THREE.Vector3(dir.x, 0.25, dir.z).normalize(), // arc upward
-        speed: 0.55,
-        vy: 0.25,          // initial upward velocity
+        dir: new THREE.Vector3(dir.x, 0.15, dir.z).normalize(), // arc slightly upward
+        speed: 0.35,
+        vy: 0.15,          // initial upward velocity
         life: 0,
         maxLife: 90        // auto-explode after ~1.5s if no collision
     };
