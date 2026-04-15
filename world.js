@@ -458,6 +458,160 @@ export function startLevel() {
     Object.assign(mentor.userData, { type: 'mentor_choice' });
     state.scene.add(mentor); state.interactables.push(mentor); state.entities.push(mentor);
 
+    // --- LEVEL 6 VILLAGE (The River Township) ---
+    if (state.currentLevel === 6) {
+        const colors = [0x5dade2, 0xeb984e, 0xaf7ac5, 0x58d68d, 0xf4d03f];
+        for (let i = 0; i < 5; i++) {
+            const hAngle = mentorAngle + (i - 2) * 0.45;
+            const hDist = moatOut + 12 + (i % 2 * 4);
+            const hx = mazeCenter + Math.cos(hAngle) * hDist;
+            const hz = mazeCenter + Math.sin(hAngle) * hDist;
+            
+            const house = new THREE.Group();
+            const walls = new THREE.Mesh(new THREE.BoxGeometry(5, 4, 5), new THREE.MeshStandardMaterial({ color: colors[i] }));
+            walls.position.y = 2;
+            const roof1 = new THREE.Mesh(new THREE.BoxGeometry(6, 0.6, 6), new THREE.MeshStandardMaterial({ color: 0x442211 }));
+            roof1.position.y = 4.3;
+            const roof2 = new THREE.Mesh(new THREE.BoxGeometry(4, 0.6, 4), new THREE.MeshStandardMaterial({ color: 0x442211 }));
+            roof2.position.y = 4.9;
+            const roof3 = new THREE.Mesh(new THREE.BoxGeometry(2, 0.6, 2), new THREE.MeshStandardMaterial({ color: 0x442211 }));
+            roof3.position.y = 5.5;
+            const door = new THREE.Mesh(new THREE.BoxGeometry(1.5, 2.5, 0.2), new THREE.MeshStandardMaterial({ color: 0x221100 }));
+            door.position.set(0, 1.25, 2.6);
+            
+            house.add(walls, roof1, roof2, roof3, door);
+            house.position.set(hx, 0, hz);
+            house.rotation.y = -hAngle + Math.PI;
+            
+            state.scene.add(house);
+            state.entities.push(house);
+            state.collidables.push(walls);
+        }
+
+        // --- THE VOXEL KEEP 2.0 (Massive Explorable Fortress) ---
+        const cAngle = mentorAngle - 0.8;
+        const cDist = moatOut + 50;
+        const cx = mazeCenter + Math.cos(cAngle) * cDist;
+        const cz = mazeCenter + Math.sin(cAngle) * cDist;
+        
+        const castle = new THREE.Group();
+        const stoneMat = new THREE.MeshStandardMaterial({ color: 0x888888 });
+        const rockMat = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.9, metalness: 0.1 });
+        
+        const castleSize = 24;
+        const wallH = 12;
+        const halfS = castleSize / 2;
+
+        // --- FIRST FLOOR STONE BASE ---
+        const base = new THREE.Mesh(new THREE.BoxGeometry(castleSize, 0.2, castleSize), rockMat);
+        base.position.y = 0.1;
+        base.userData = { type: 'floor', yTop: 0.2 };
+        castle.add(base);
+        state.entities.push(base);
+
+        // Walls (Total H = wallH, two floors)
+        const castleWalls = [
+            { w: castleSize, h: wallH, d: 2, x: 0, z: halfS },  // North
+            { w: castleSize, h: wallH, d: 2, x: 0, z: -halfS }, // South
+            { w: 2, h: wallH, d: castleSize, x: halfS, z: 0 },  // East
+            { w: 2, h: wallH, d: castleSize, x: -halfS, z: 0 }, // West (Gate)
+        ];
+        castleWalls.forEach(wd => {
+            if (wd.x === -halfS) { // West wall with HUGE gate hole
+                const top = new THREE.Mesh(new THREE.BoxGeometry(2, 6, castleSize), stoneMat);
+                top.position.set(-halfS, 9, 0);
+                castle.add(top); state.collidables.push(top);
+                const side1 = new THREE.Mesh(new THREE.BoxGeometry(2, 6, 8), stoneMat);
+                side1.position.set(-halfS, 3, 8);
+                castle.add(side1); state.collidables.push(side1);
+                const side2 = new THREE.Mesh(new THREE.BoxGeometry(2, 6, 8), stoneMat);
+                side2.position.set(-halfS, 3, -8);
+                castle.add(side2); state.collidables.push(side2);
+            } else {
+                const wall = new THREE.Mesh(new THREE.BoxGeometry(wd.w, wd.h, wd.d), stoneMat);
+                wall.position.set(wd.x, wallH / 2, wd.z);
+                castle.add(wall); state.collidables.push(wall);
+            }
+        });
+
+        // Corner Towers (Massive)
+        const towPos = [[halfS, halfS], [halfS, -halfS], [-halfS, halfS], [-halfS, -halfS]];
+        towPos.forEach(p => {
+            const tower = new THREE.Mesh(new THREE.BoxGeometry(5, 18, 5), stoneMat);
+            tower.position.set(p[0], 9, p[1]);
+            castle.add(tower); state.collidables.push(tower);
+            const trim = new THREE.Mesh(new THREE.BoxGeometry(6, 1.5, 6), stoneMat);
+            trim.position.set(p[0], 18, p[1]);
+            castle.add(trim);
+        });
+
+        // Second Floor Deck (y=6, with stair hole)
+        const fSize = (castleSize - 4) / 2;
+        // Instead of one big block, use 3 sections to leave a hole in the 4th quadrant (where stairs are)
+        const sections = [
+            { w: castleSize - 4, d: fSize, x: 0, z: -fSize/2, y: 6 }, // South half
+            { w: fSize, d: fSize, x: -fSize/2, z: fSize/2, y: 6 }, // North-West quadrant
+            // North-East quadrant is the HOLE for the stairs
+        ];
+        sections.forEach(s => {
+            const sec = new THREE.Mesh(new THREE.BoxGeometry(s.w, 0.5, s.d), rockMat);
+            sec.position.set(s.x, s.y, s.z);
+            sec.userData = { type: 'floor', yTop: s.y + 0.25, hx: s.w / 2, hz: s.d / 2 };
+            castle.add(sec);
+            state.entities.push(sec);
+        });
+
+        // Voxel Stairs (Dark Wood)
+        const stairMat = new THREE.MeshStandardMaterial({ color: 0x442211 });
+        const stepCount = 12;
+        for (let i = 0; i < stepCount; i++) {
+            const stepH = 0.5;
+            const sy = i * stepH + stepH/2;
+            const isLanding = (i === stepCount - 1);
+            const stepW = 4, stepD = isLanding ? 6 : 1.5;
+            const step = new THREE.Mesh(new THREE.BoxGeometry(stepW, stepH, stepD), stairMat);
+            const sz = -8 + i * 1.3 + (isLanding ? 2.25 : 0);
+            step.position.set(6, sy, sz);
+            step.userData = { type: 'floor', yTop: sy + stepH/2, hx: stepW / 2, hz: stepD / 2 };
+            castle.add(step);
+            state.entities.push(step);
+        }
+
+        // Central Gold Reward (Moved up to second floor!)
+        const chest = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.8, 1.5), new THREE.MeshStandardMaterial({ color: 0xffaa00 }));
+        chest.position.set(0, 6.4, -4);
+        chest.userData = { type: 'gold', amount: 1000 };
+        castle.add(chest); state.interactables.push(chest);
+
+        // PILE OF GOLD (Individual pieces to pick up)
+        for (let j = 0; j < 8; j++) {
+            const gx = (Math.random() - 0.5) * 4;
+            const gz = (Math.random() - 0.5) * 4;
+            const gp = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.1, 0.4), new THREE.MeshStandardMaterial({ color: 0xffd700 }));
+            gp.position.set(gx, 6.05, gz); // Inside the castle group, sits on the y=6 floor
+            gp.userData = { type: 'gold', amount: 50 };
+            castle.add(gp);
+            state.interactables.push(gp);
+        }
+
+        // CASTLE SENTRY (Ghost)
+        const sentry = createGhostEnemy();
+        sentry.position.set(cx - 5, 8, cz + 5); // Start on top floor
+        sentry.userData = { 
+            type: 'enemy', 
+            dir: new THREE.Vector3(1, 0, 0), 
+            speed: 0.06, 
+            isCastleSentry: true 
+        };
+        state.scene.add(sentry);
+        state.enemies.push(sentry);
+
+        castle.position.set(cx, 0, cz);
+        castle.rotation.y = -cAngle + Math.PI;
+        state.scene.add(castle);
+        state.entities.push(castle);
+    }
+
     // Trees
     for (let i = 0; i < 120; i++) {
         const angle = Math.random() * Math.PI * 2;

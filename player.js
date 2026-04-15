@@ -203,15 +203,30 @@ export function handleGrab() {
     const ray = new THREE.Raycaster();
     ray.setFromCamera(new THREE.Vector2(0, 0), state.camera);
     const hits = ray.intersectObjects(state.interactables, true);
+    
+    let interactTarget = null;
     if (hits.length > 0 && hits[0].distance < 4.5) {
         let obj = hits[0].object;
-        let interactTarget = null;
         while (obj) {
             if (obj.userData && obj.userData.type) { interactTarget = obj; break; }
             obj = obj.parent;
         }
-        if (interactTarget) processLogic(interactTarget);
     }
+
+    // FALLBACK: Proximity check for items inside groups (gold piles, etc)
+    if (!interactTarget) {
+        for (const int of state.interactables) {
+            const worldPos = new THREE.Vector3();
+            int.getWorldPosition(worldPos);
+            const dist = state.camera.position.distanceTo(worldPos);
+            if (dist < 4.5 && int.userData && int.userData.type) {
+                interactTarget = int;
+                break;
+            }
+        }
+    }
+
+    if (interactTarget) processLogic(interactTarget);
     setTimeout(() => {
         state.handGroup.visible = false;
         state.handGroup.position.z = -1.2;
@@ -355,6 +370,15 @@ export function processLogic(obj) {
         const btn3 = document.getElementById('mentor-btn-3');
         if (btn3) btn3.textContent = state.currentLevel === 1 ? '3. Skip to Level 2' : '3. Receive 500 gold pieces';
         document.getElementById('mentor-ui').style.display = 'flex';
+    } else if (d.type === 'gold') {
+        const amount = d.amount || 25;
+        state.gold += amount;
+        sfx.win();
+        showMsg("COLLECTED +" + amount + " GOLD!");
+        updateHUD();
+        const root = obj.userData.root || obj;
+        state.scene.remove(root);
+        state.interactables = state.interactables.filter(i => i !== root);
     } else if (d.type === 'talk') {
         showMsg(d.msg);
     } else if (d.type === 'door') {

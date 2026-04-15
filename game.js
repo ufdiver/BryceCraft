@@ -205,10 +205,14 @@ function animate() {
                 for (const ent of state.entities) {
                     if (ent.userData && (ent.userData.type === 'placed' || ent.userData.type === 'floor')) {
                         const top = ent.userData.type === 'placed' ? ent.position.y + 0.5 : ent.userData.yTop;
+                        const worldPos = new THREE.Vector3();
+                        ent.getWorldPosition(worldPos);
+                        const hx = ent.userData.hx || 2.5;
+                        const hz = ent.userData.hz || 2.5;
                         // Lenient check: if player is roughly at or above floor level, treat it as ground
                         if (state.camera.position.y >= top - 0.5) {
-                            if (Math.abs(state.camera.position.x - ent.position.x) < CELL/2 + 0.5 &&
-                                Math.abs(state.camera.position.z - ent.position.z) < CELL/2 + 0.5) {
+                            if (Math.abs(state.camera.position.x - worldPos.x) < hx &&
+                                Math.abs(state.camera.position.z - worldPos.z) < hz) {
                                 floorY = Math.max(floorY, top);
                             }
                         }
