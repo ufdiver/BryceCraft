@@ -59,6 +59,7 @@ export const state = {
     lavaPatches: [],
     laserBeams: [],
     clouds: [],
+    selectorMesh: null,
 
     // Hand mesh parts (populated in game.js)
     handGroup: null,

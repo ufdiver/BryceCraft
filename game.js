@@ -108,6 +108,13 @@ Object.keys(state.itemModels).forEach(key => {
     state.camera.add(state.itemModels[key]);
 });
 
+// --- BUILDING SELECTOR MESH ---
+const selectGeo = new THREE.BoxGeometry(1.02, 1.02, 1.02);
+const selectMat = new THREE.MeshBasicMaterial({ color: 0xffffff, wireframe: true, transparent: true, opacity: 0.5 });
+state.selectorMesh = new THREE.Mesh(selectGeo, selectMat);
+state.selectorMesh.visible = false;
+state.scene.add(state.selectorMesh);
+
 // --- WINDOW GLOBALS (called from HTML onclick attributes) ---
 window.toggleMap = toggleMap;
 window.showHowTo = showHowTo;
@@ -207,10 +214,15 @@ function animate() {
                         const top = ent.userData.type === 'placed' ? ent.position.y + 0.5 : ent.userData.yTop;
                         const worldPos = new THREE.Vector3();
                         ent.getWorldPosition(worldPos);
-                        const hx = ent.userData.hx || 2.5;
-                        const hz = ent.userData.hz || 2.5;
-                        // Lenient check: if player is roughly at or above floor level, treat it as ground
-                        if (state.camera.position.y >= top - 0.5) {
+                        // Slightly larger radius (0.8) for blocks to ensure overlap when walking across a horizontal row
+                        const hx = ent.userData.type === 'floor' ? (ent.userData.hx || 2.5) : 0.8;
+                        const hz = ent.userData.type === 'floor' ? (ent.userData.hz || 2.5) : 0.8;
+                        
+                        const feetY = state.camera.position.y - (state.isCrouching ? 0.85 : 2.0);
+                        const heightDiff = top - feetY;
+
+                        // STRICTOR CHECK: Allow stepping up 1 block, but also allow walking on same level or dropping down
+                        if (heightDiff <= 1.1) {
                             if (Math.abs(state.camera.position.x - worldPos.x) < hx &&
                                 Math.abs(state.camera.position.z - worldPos.z) < hz) {
                                 floorY = Math.max(floorY, top);
@@ -233,7 +245,11 @@ function animate() {
                     state.camera.position.y = baseY;
                     state.jumpVelocity = 0;
                 }
+            } else if (state.camera.position.y > baseY + 0.1) {
+                // Walked off a ledge: initiate gravity fall
+                state.jumpVelocity = -0.01;
             } else {
+                // Grounded or stepping up: use smooth lerp
                 state.camera.position.y += (baseY - state.camera.position.y) * 0.15;
             }
 
@@ -713,5 +729,44 @@ function animate() {
             c.position.x += c.userData.speed;
             if (c.position.x > 450) c.position.x = -450;
         });
+    }
+
+    // --- ANIMATE SELECTOR ---
+    if (state.selectorMesh) {
+        const item = state.inventoryTypes[state.selectedItemIdx];
+        if (item === 'shovel' || item === 'pickaxe') {
+            const dir = new THREE.Vector3();
+            state.camera.getWorldDirection(dir);
+            dir.y = 0; dir.normalize();
+            
+            if (item === 'shovel') {
+                const reach = 3;
+                const bx = Math.round(state.camera.position.x + dir.x * reach);
+                const bz = Math.round(state.camera.position.z + dir.z * reach);
+                let stackTop = 0;
+                for (const w of state.collidables) {
+                    if (w.userData.type === 'placed' && Math.abs(w.position.x - bx) < 0.1 && Math.abs(w.position.z - bz) < 0.1) {
+                        stackTop = Math.max(stackTop, w.position.y + 0.5);
+                    }
+                }
+                state.selectorMesh.position.set(bx, stackTop + 0.5, bz);
+                state.selectorMesh.scale.set(1, 1, 1);
+                state.selectorMesh.visible = true;
+            } else {
+                const ray = new THREE.Raycaster();
+                ray.setFromCamera(new THREE.Vector2(0, 0), state.camera);
+                const placed = state.collidables.filter(b => b.userData.type === 'placed');
+                const hits = ray.intersectObjects(placed);
+                if (hits.length > 0 && hits[0].distance < 4.5) {
+                    state.selectorMesh.position.copy(hits[0].object.position);
+                    state.selectorMesh.scale.set(1.1, 1.1, 1.1);
+                    state.selectorMesh.visible = true;
+                } else {
+                    state.selectorMesh.visible = false;
+                }
+            }
+        } else {
+            state.selectorMesh.visible = false;
+        }
     }
 }
