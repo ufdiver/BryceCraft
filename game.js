@@ -3,7 +3,7 @@ import { state, STAND_HEIGHT, CROUCH_HEIGHT, GRAVITY, CELL, GRID_SIZE } from './
 import { sfx, audioCtx, ambient } from './audio.js';
 import { updateHUD, showMsg, toggleMap, showHowTo, hideHowTo, showAdmin, hideAdmin } from './ui.js';
 import { startLevel } from './world.js';
-import { keysDown, handleDeath, spawnBulletHole } from './player.js';
+import { handleDeath, spawnBulletHole } from './player.js';
 
 // --- THREE.JS SCENE SETUP ---
 state.scene = new THREE.Scene();
@@ -185,8 +185,8 @@ function animate() {
             state.camera.position.y -= 0.01;
         } else {
             const old = state.camera.position.clone();
-            // Hold C to crouch, release to stand (disabled mid-air)
-            state.isCrouching = !!keysDown['KeyC'] && !state.isDead && state.jumpVelocity === 0;
+            // Hold C to crouch, release to stand
+            state.isCrouching = !!state.keys['KeyC'] && !state.isDead && !state.isFlying;
             document.getElementById('crouch-hud').style.display = state.isCrouching ? 'block' : 'none';
             const playerHeight = state.isCrouching ? CROUCH_HEIGHT : STAND_HEIGHT;
 
@@ -236,8 +236,8 @@ function animate() {
             // Jump physics — override Y lerp while airborne; skip entirely while flying
             if (state.isFlying) {
                 // Flying vertical movement: X=Up, C=Down
-                if (keysDown['KeyX']) state.camera.position.y += 0.15;
-                if (keysDown['KeyC']) state.camera.position.y -= 0.15;
+                if (state.keys['KeyX']) state.camera.position.y += 0.15;
+                if (state.keys['KeyC']) state.camera.position.y -= 0.15;
             } else if (state.jumpVelocity !== 0) {
                 state.camera.position.y += state.jumpVelocity;
                 state.jumpVelocity -= GRAVITY;
@@ -245,8 +245,8 @@ function animate() {
                     state.camera.position.y = baseY;
                     state.jumpVelocity = 0;
                 }
-            } else if (state.camera.position.y > baseY + 0.1) {
-                // Walked off a ledge: initiate gravity fall
+            } else if (state.camera.position.y > floorY + STAND_HEIGHT + 0.5) {
+                // Walked off a ledge: initiate gravity fall ONLY if significantly above standing floor
                 state.jumpVelocity = -0.01;
             } else {
                 // Grounded or stepping up: use smooth lerp
@@ -300,20 +300,20 @@ function animate() {
             }
 
             if (!state.isPlayerOnBoat) {
-                const isSprinting = (keysDown['ShiftLeft'] || keysDown['ShiftRight']) && !state.isCrouching;
+                const isSprinting = (state.keys['ShiftLeft'] || state.keys['ShiftRight']) && !state.isCrouching;
                 const baseSpeed = state.isCrouching ? 0.07 : 0.13;
                 const moveSpeed = isSprinting ? baseSpeed * 2.0 : baseSpeed;
 
-                if (keysDown['ArrowUp'] || keysDown['KeyW'] || keysDown['ArrowDown'] || keysDown['KeyS']) {
+                if (state.keys['ArrowUp'] || state.keys['KeyW'] || state.keys['ArrowDown'] || state.keys['KeyS']) {
                     if (state.isSafeStart) { state.isSafeStart = false; state.invincibleTime = 3.0; }
                 }
-                if (keysDown['ArrowUp'] || keysDown['KeyW']) state.camera.translateZ(-moveSpeed);
-                if (keysDown['ArrowDown'] || keysDown['KeyS']) state.camera.translateZ(moveSpeed);
-                if (keysDown['ArrowLeft'] || keysDown['KeyA'] || keysDown['ArrowRight'] || keysDown['KeyD']) {
+                if (state.keys['ArrowUp'] || state.keys['KeyW']) state.camera.translateZ(-moveSpeed);
+                if (state.keys['ArrowDown'] || state.keys['KeyS']) state.camera.translateZ(moveSpeed);
+                if (state.keys['ArrowLeft'] || state.keys['KeyA'] || state.keys['ArrowRight'] || state.keys['KeyD']) {
                     if (state.isSafeStart) { state.isSafeStart = false; state.invincibleTime = 3.0; }
                 }
-                if (keysDown['ArrowLeft'] || keysDown['KeyA']) state.camera.rotation.y += 0.045;
-                if (keysDown['ArrowRight'] || keysDown['KeyD']) state.camera.rotation.y -= 0.045;
+                if (state.keys['ArrowLeft'] || state.keys['KeyA']) state.camera.rotation.y += 0.045;
+                if (state.keys['ArrowRight'] || state.keys['KeyD']) state.camera.rotation.y -= 0.045;
             }
 
             const playerBB = new THREE.Box3(

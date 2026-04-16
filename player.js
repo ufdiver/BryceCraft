@@ -4,7 +4,7 @@ import { sfx } from './audio.js';
 import { updateHUD, showMsg } from './ui.js';
 import { startLevel } from './world.js';
 
-export const keysDown = {};
+
 
 function createBlockTexture(baseColor, type) {
     const canvas = document.createElement('canvas');
@@ -68,7 +68,7 @@ let selectedBlockIdx = 0;
 
 window.addEventListener('keydown', e => {
     if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "Space", "KeyB", "KeyE", "KeyF", "KeyC", "KeyX", "KeyV", "KeyG", "KeyT", "ShiftLeft", "ShiftRight", "KeyP", "Tab"].includes(e.code)) e.preventDefault();
-    keysDown[e.code] = true;
+    state.keys[e.code] = true;
 
     if (e.code === 'Tab' && !state.isMathActive && !state.isDead) handleCycleItem();
     if (e.code === 'KeyG' && !state.isMathActive && !state.isDead) handleCycleBlock();
@@ -117,7 +117,7 @@ window.addEventListener('keydown', e => {
         }
     }
 });
-window.addEventListener('keyup', e => keysDown[e.code] = false);
+window.addEventListener('keyup', e => state.keys[e.code] = false);
 
 export function handleShoot() {
     if (!state.hasGun || state.ammo <= 0) {
@@ -335,6 +335,25 @@ export function processLogic(obj) {
         input.value = ''; input.focus();
         const check = (e) => {
             if (e.key === 'Enter') {
+                const val = parseInt(input.value);
+                let skipTo = 0;
+                if (val === -222) skipTo = 2;
+                else if (val === -333) skipTo = 3;
+                else if (val === -441) skipTo = 4;
+                else if (val === -552) skipTo = 5;
+
+                if (skipTo > 0) {
+                    state.currentLevel = skipTo;
+                    showMsg(`SPECIAL BYPASS: LEVEL ${skipTo}!`);
+                    sfx.levelUp();
+                    setTimeout(startLevel, 1000);
+                    state.isMathActive = false; 
+                    document.getElementById('math-ui').style.display = 'none';
+                    updateHUD(); 
+                    window.removeEventListener('keydown', check);
+                    return;
+                }
+
                 if (parseInt(input.value) === ans) {
                     state.gold += reward; showMsg("CORRECT! +" + reward + " GOLD"); sfx.win();
                     if (obj.userData.isFerryman) {

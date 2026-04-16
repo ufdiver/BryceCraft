@@ -14,6 +14,7 @@ export const state = {
     inventoryTypes: ['hand', 'gun', 'shovel', 'pickaxe', 'grenade', 'bomb', 'pellet'],
     itemSwingTime: 0,
     isAdmin: false,
+    keys: {},
 
     // Game flow
     isMathActive: false,
